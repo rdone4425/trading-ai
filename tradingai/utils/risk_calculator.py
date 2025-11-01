@@ -155,12 +155,36 @@ class RiskCalculator:
         if stop_distance_percent == 0:
             return 1
         
-        # 根据止损距离和风险百分比计算建议杠杆
-        # 公式：杠杆 = 100 / (止损距离% * 100 / 风险%)
-        leverage = risk_percent / (stop_distance_percent * 100)
+        # 改进的杠杆计算公式
+        # 旧公式：leverage = risk_percent / (stop_distance_percent * 100)
+        # 新公式：基于止损距离百分比直接计算
+        # 例如：止损距离4% → 杠杆可以达到2-3倍
+        # 例如：止损距离2% → 杠杆可以达到5-6倍
+        # 例如：止损距离1% → 杠杆可以达到8-10倍
         
-        # 限制在 1 到 max_leverage 之间
-        leverage = max(1, min(int(leverage), max_leverage))
+        # 使用反比例关系：杠杆 = max_leverage / (止损距离 / 最小止损距离)
+        # 最小止损距离设为0.5%（紧凑的止损）
+        min_stop_distance = 0.005  # 0.5%
+        
+        if stop_distance_percent >= 0.05:  # 止损距离>=5%，保守处理
+            leverage = 1
+        elif stop_distance_percent >= 0.03:  # 止损距离>=3%
+            leverage = 2
+        elif stop_distance_percent >= 0.02:  # 止损距离>=2%
+            leverage = 3
+        elif stop_distance_percent >= 0.015:  # 止损距离>=1.5%
+            leverage = 4
+        elif stop_distance_percent >= 0.01:  # 止损距离>=1%
+            leverage = 5
+        elif stop_distance_percent >= 0.008:  # 止损距离>=0.8%
+            leverage = 6
+        elif stop_distance_percent >= 0.006:  # 止损距离>=0.6%
+            leverage = 7
+        else:  # 止损距离<0.6%，非常紧凑
+            leverage = 8
+        
+        # 应用最大杠杆限制
+        leverage = min(leverage, max_leverage)
         
         return leverage
     
