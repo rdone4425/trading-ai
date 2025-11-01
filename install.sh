@@ -304,6 +304,227 @@ check_project() {
     return 0
 }
 
+# 检查是否为 Git 仓库
+check_git_repo() {
+    if [ -d ".git" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# 获取 GitHub 仓库 URL
+get_repo_url() {
+    if check_git_repo; then
+        git remote get-url origin 2>/dev/null || echo "https://github.com/rdone4425/trading-ai.git"
+    else
+        echo "https://github.com/rdone4425/trading-ai.git"
+    fi
+}
+
+# 下载/克隆项目
+download_project() {
+    print_header "下载 Trading AI 项目"
+    
+    REPO_URL="https://github.com/rdone4425/trading-ai.git"
+    
+    if check_project; then
+        print_warning "当前目录已经是 Trading AI 项目"
+        read -p "是否要重新克隆到其他目录？(y/N): " reclone
+        if [ "$reclone" != "y" ] && [ "$reclone" != "Y" ]; then
+            return 0
+        fi
+        
+        read -p "请输入目标目录路径（默认: ../trading-ai-new）: " target_dir
+        target_dir=${target_dir:-"../trading-ai-new"}
+        
+        if [ -d "$target_dir" ]; then
+            print_error "目标目录已存在: $target_dir"
+            read -p "按 Enter 继续..."
+            return 1
+        fi
+        
+        print_info "正在克隆到: $target_dir"
+        git clone "$REPO_URL" "$target_dir"
+        
+        if [ $? -eq 0 ]; then
+            print_success "项目已克隆到: $target_dir"
+            print_info "请进入该目录运行: cd $target_dir && ./install.sh"
+            read -p "按 Enter 继续..."
+        else
+            print_error "克隆失败"
+            read -p "按 Enter 继续..."
+            return 1
+        fi
+    else
+        # 当前目录不是项目，询问是否在当前目录克隆
+        print_info "当前目录不是 Trading AI 项目"
+        read -p "是否要在当前目录克隆项目？(Y/n): " clone_here
+        
+        if [ "$clone_here" != "n" ] && [ "$clone_here" != "N" ]; then
+            if [ "$(ls -A . 2>/dev/null)" ]; then
+                print_warning "当前目录不为空"
+                read -p "是否继续？可能会覆盖现有文件 (y/N): " confirm
+                if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+                    return 1
+                fi
+            fi
+            
+            print_info "正在克隆项目..."
+            git clone "$REPO_URL" .
+            
+            if [ $? -eq 0 ]; then
+                print_success "项目已克隆"
+                # 赋予脚本执行权限
+                chmod +x install.sh
+                read -p "按 Enter 继续..."
+                return 0
+            else
+                print_error "克隆失败"
+                read -p "按 Enter 继续..."
+                return 1
+            fi
+        else
+            # 询问目标目录
+            read -p "请输入目标目录路径: " target_dir
+            if [ -z "$target_dir" ]; then
+                print_error "目录路径不能为空"
+                read -p "按 Enter 继续..."
+                return 1
+            fi
+            
+            if [ -d "$target_dir" ]; then
+                print_error "目标目录已存在: $target_dir"
+                read -p "按 Enter 继续..."
+                return 1
+            fi
+            
+            print_info "正在克隆到: $target_dir"
+            git clone "$REPO_URL" "$target_dir"
+            
+            if [ $? -eq 0 ]; then
+                print_success "项目已克隆到: $target_dir"
+                print_info "请进入该目录运行: cd $target_dir && ./install.sh"
+                read -p "按 Enter 继续..."
+            else
+                print_error "克隆失败"
+                read -p "按 Enter 继续..."
+                return 1
+            fi
+        fi
+    fi
+}
+
+# 更新项目代码
+update_project() {
+    print_header "更新项目代码"
+    
+    if ! check_git_repo; then
+        print_error "当前目录不是 Git 仓库"
+        print_info "无法更新，请使用选项 [D] 下载项目"
+        read -p "按 Enter 继续..."
+        return 1
+    fi
+    
+    print_info "正在检查更新..."
+    
+    # 获取当前分支
+    current_branch=$(git branch --show-current 2>/dev/null || echo "main")
+    print_info "当前分支: $current_branch"
+    
+    # 检查是否有未提交的更改
+    if [ -n "$(git status -s)" ]; then
+        print_warning "检测到未提交的更改"
+        read -p "是否要先提交或暂存更改？(y/N): " handle_changes
+        
+        if [ "$handle_changes" = "y" ] || [ "$handle_changes" = "Y" ]; then
+            print_info "你可以："
+            echo "  1. git add . && git commit -m '你的提交信息'"
+            echo "  2. git stash（暂存更改）"
+            echo ""
+            read -p "处理完成后按 Enter 继续更新..."
+        else
+            print_warning "未提交的更改可能会被覆盖"
+            read -p "是否继续更新？(y/N): " continue_update
+            if [ "$continue_update" != "y" ] && [ "$continue_update" != "Y" ]; then
+                return 0
+            fi
+        fi
+    fi
+    
+    # 获取远程更新
+    print_info "正在从 GitHub 拉取最新代码..."
+    git fetch origin
+    
+    # 检查是否有更新
+    local_hash=$(git rev-parse HEAD)
+    remote_hash=$(git rev-parse origin/$current_branch 2>/dev/null)
+    
+    if [ "$local_hash" = "$remote_hash" ]; then
+        print_success "代码已是最新版本"
+        read -p "按 Enter 继续..."
+        return 0
+    fi
+    
+    print_info "发现新版本，正在更新..."
+    
+    # 暂存当前更改（如果有）
+    git stash > /dev/null 2>&1
+    
+    # 拉取更新
+    git pull origin $current_branch
+    
+    if [ $? -eq 0 ]; then
+        print_success "代码更新成功"
+        
+        # 恢复暂存的更改（如果有）
+        if [ -n "$(git stash list)" ]; then
+            print_info "检测到暂存的更改，正在恢复..."
+            git stash pop > /dev/null 2>&1 || true
+        fi
+        
+        # 检查是否需要重新构建
+        if [ ! -z "$COMPOSE_CMD" ]; then
+            print_info "检测到代码更新，需要重新构建镜像"
+            read -p "是否立即重新构建并重启服务？(Y/n): " rebuild
+            
+            if [ "$rebuild" != "n" ] && [ "$rebuild" != "N" ]; then
+                # 检查服务是否运行
+                if $COMPOSE_CMD ps | grep -q "trading-ai.*Up"; then
+                    print_info "服务正在运行，先停止服务..."
+                    $COMPOSE_CMD down
+                fi
+                
+                # 重新构建
+                print_info "正在重新构建镜像..."
+                $COMPOSE_CMD build
+                
+                if [ $? -eq 0 ]; then
+                    print_success "镜像构建完成"
+                    
+                    # 启动服务
+                    read -p "是否立即启动服务？(Y/n): " start_now
+                    if [ "$start_now" != "n" ] && [ "$start_now" != "N" ]; then
+                        print_info "正在启动服务..."
+                        $COMPOSE_CMD up -d
+                        print_success "服务已启动"
+                        sleep 1
+                        show_status
+                    fi
+                else
+                    print_error "镜像构建失败"
+                fi
+            fi
+        fi
+        
+        read -p "按 Enter 继续..."
+    else
+        print_error "更新失败，请检查网络连接或 Git 配置"
+        read -p "按 Enter 继续..."
+        return 1
+    fi
+}
+
 # 创建必要的目录
 create_directories() {
     mkdir -p data logs
@@ -462,10 +683,30 @@ show_menu() {
     fi
     
     # 检查项目状态
+    GIT_STATUS=""
+    UPDATE_STATUS=""
     if check_project; then
         PROJECT_STATUS="${GREEN}✓${NC}"
+        if check_git_repo; then
+            GIT_STATUS="${GREEN}✓${NC}"
+            # 检查是否有更新
+            git fetch origin > /dev/null 2>&1
+            current_branch=$(git branch --show-current 2>/dev/null || echo "main")
+            local_hash=$(git rev-parse HEAD 2>/dev/null)
+            remote_hash=$(git rev-parse origin/$current_branch 2>/dev/null)
+            if [ "$local_hash" != "$remote_hash" ] && [ ! -z "$remote_hash" ]; then
+                UPDATE_STATUS="${YELLOW}有新版本${NC}"
+            else
+                UPDATE_STATUS="${GREEN}已最新${NC}"
+            fi
+        else
+            GIT_STATUS="${RED}✗${NC}"
+            UPDATE_STATUS="${RED}未知${NC}"
+        fi
     else
         PROJECT_STATUS="${RED}✗${NC}"
+        GIT_STATUS="${RED}✗${NC}"
+        UPDATE_STATUS="${RED}未知${NC}"
     fi
     
     # 检查服务状态
@@ -483,19 +724,32 @@ show_menu() {
     echo -e "  Docker:        $DOCKER_STATUS"
     echo -e "  Docker Compose: $COMPOSE_STATUS"
     echo -e "  项目文件:      $PROJECT_STATUS"
+    if [ ! -z "$GIT_STATUS" ]; then
+        echo -e "  Git 仓库:      $GIT_STATUS"
+        echo -e "  代码版本:      $UPDATE_STATUS"
+    fi
     echo -e "  服务状态:      $SERVICE_STATUS"
     echo ""
     echo -e "${CYAN}请选择操作：${NC}"
     echo ""
+    echo -e "${GREEN}项目管理：${NC}"
+    echo "  [D] 下载/克隆项目"
+    echo "  [U] 更新项目代码（从 GitHub）"
+    echo ""
+    echo -e "${GREEN}环境准备：${NC}"
     echo "  [1] 安装 Docker"
     echo "  [2] 安装 Docker Compose"
     echo "  [3] 配置环境变量"
+    echo ""
+    echo -e "${GREEN}服务管理：${NC}"
     echo "  [4] 构建 Docker 镜像"
     echo "  [5] 启动服务"
     echo "  [6] 停止服务"
     echo "  [7] 重启服务"
     echo "  [8] 查看日志"
     echo "  [9] 查看状态"
+    echo ""
+    echo -e "${GREEN}其他：${NC}"
     echo "  [C] 清理/卸载"
     echo "  [0] 退出"
     echo ""
@@ -504,11 +758,27 @@ show_menu() {
 
 # 主循环
 main() {
-    # 检查是否在项目目录
+    # 如果不在项目目录，提示下载
     if ! check_project; then
         print_error "当前目录不是 Trading AI 项目目录"
-        print_info "请确保在项目根目录运行此脚本"
-        exit 1
+        echo ""
+        print_info "你可以："
+        echo "  1. 在项目目录运行此脚本"
+        echo "  2. 使用选项 [D] 下载项目到当前目录"
+        echo ""
+        read -p "是否现在下载项目？(Y/n): " download_now
+        
+        if [ "$download_now" != "n" ] && [ "$download_now" != "N" ]; then
+            download_project
+            # 重新检查
+            if ! check_project; then
+                print_error "项目下载失败或未完成，退出脚本"
+                exit 1
+            fi
+        else
+            print_info "退出脚本"
+            exit 0
+        fi
     fi
     
     # 更新 COMPOSE_CMD
@@ -519,6 +789,16 @@ main() {
         read choice
         
         case $choice in
+            d|D)
+                download_project
+                # 如果下载成功，重新检查项目
+                if check_project; then
+                    COMPOSE_CMD=$(get_compose_cmd)
+                fi
+                ;;
+            u|U)
+                update_project
+                ;;
             1)
                 if check_docker; then
                     print_info "Docker 已安装"

@@ -27,14 +27,26 @@
 
 ### 方式一：一键安装脚本（最简单推荐）
 
-一条命令完成所有操作：
+**如果你已经有 `install.sh` 脚本：**
+```bash
+./install.sh
+```
+如果当前目录不是项目目录，脚本会自动提示下载。
 
+**首次安装，一条命令完成：**
 ```bash
 git clone https://github.com/rdone4425/trading-ai.git && cd trading-ai && chmod +x install.sh && ./install.sh
 ```
 
-或分步执行：
+**或者在任意目录运行脚本，它会引导下载：**
+```bash
+# 下载并运行脚本
+curl -fsSL https://raw.githubusercontent.com/rdone4425/trading-ai/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+```
 
+**分步执行（传统方式）：**
 ```bash
 # 1. 克隆项目
 git clone https://github.com/rdone4425/trading-ai.git
@@ -51,6 +63,8 @@ chmod +x install.sh
 
 | 选项 | 功能 | 说明 |
 |------|------|------|
+| **D** | 下载/克隆项目 | 从 GitHub 下载项目到当前目录或指定目录 |
+| **U** | 更新项目代码 | 从 GitHub 拉取最新代码并自动重新构建启动 |
 | **1** | 安装 Docker | 自动检测系统并安装 Docker |
 | **2** | 安装 Docker Compose | 安装 Docker Compose（如未安装） |
 | **3** | 配置环境变量 | 交互式配置 `.env` 文件 |
@@ -64,11 +78,19 @@ chmod +x install.sh
 | **0** | 退出 | 退出管理菜单 |
 
 **脚本特性：**
-- ✅ 自动检测 Docker/Docker Compose 安装状态
-- ✅ 支持 Ubuntu/Debian/CentOS/RHEL/Fedora
-- ✅ 智能菜单，实时显示系统状态
-- ✅ 彩色输出，操作提示清晰
-- ✅ 一键完成所有配置和部署
+- ✅ **自动下载代码**：如果当前目录不是项目，脚本会自动提示下载
+- ✅ **一键更新**：从 GitHub 更新代码后自动重新构建并启动服务
+- ✅ **智能检测**：自动检测 Docker/Docker Compose 安装状态
+- ✅ **版本提示**：菜单中显示代码是否有新版本可用
+- ✅ **支持多系统**：支持 Ubuntu/Debian/CentOS/RHEL/Fedora
+- ✅ **彩色输出**：实时显示系统状态，操作提示清晰
+
+**更新流程：**
+1. 选择菜单选项 `[U]` 更新项目代码
+2. 脚本自动检测是否有新版本
+3. 如果有更新，自动拉取最新代码
+4. 询问是否立即重新构建并启动服务
+5. 完成！服务已运行最新版本
 
 ### 方式二：Docker 手动部署
 
@@ -348,7 +370,16 @@ PROXY_PORT=7890
 - 手动安装：参考 [Docker 官方文档](https://docs.docker.com/get-docker/)
 
 ### Q: 如何更新项目？
-**A:** 
+**A:** 有两种方式：
+
+**方式一：使用安装脚本（推荐）**
+```bash
+./install.sh
+# 选择菜单选项 [U] 更新项目代码
+# 脚本会自动检测更新、拉取代码、重新构建并启动服务
+```
+
+**方式二：手动更新**
 ```bash
 # 使用 Git 拉取最新代码
 git pull origin main
