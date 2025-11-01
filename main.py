@@ -175,8 +175,11 @@ async def perform_review_from_history(
             closed_trades = await platform.get_closed_trades(limit=100)  # 最多100笔
             
             if not closed_trades:
-                # 没有交易历史，静默跳过（可能是没有交易或API权限问题）
+                logger.info("  ℹ️  没有找到最近1天的已平仓交易，无法进行复盘。")
+                logger.info("  💡 请确保您的交易所API有足够的权限，并且有交易记录。")
                 return
+            
+            logger.info(f"  ✅ 成功从交易所获取 {len(closed_trades)} 笔历史交易数据。")
             
             # 转换为复盘格式（需要配对买入和卖出，计算完整交易）
             reviewed_trades = _process_trades_for_review(closed_trades)
