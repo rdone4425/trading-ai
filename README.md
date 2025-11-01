@@ -25,55 +25,114 @@
 
 ## 🚀 快速开始
 
-### 方式一：自动安装脚本（最简单）
+### 方式一：一键安装脚本（最简单推荐）
+
+一条命令完成所有操作：
+
+```bash
+git clone https://github.com/rdone4425/trading-ai.git && cd trading-ai && chmod +x install.sh && ./install.sh
+```
+
+或分步执行：
 
 ```bash
 # 1. 克隆项目
 git clone https://github.com/rdone4425/trading-ai.git
 cd trading-ai
 
-# 2. 运行自动安装脚本（交互式）
+# 2. 赋予执行权限并运行
 chmod +x install.sh
 ./install.sh
 ```
 
-脚本会自动：
-- ✅ 检测并安装 Docker 和 Docker Compose
-- ✅ 交互式配置环境变量
-- ✅ 构建 Docker 镜像
-- ✅ 启动服务
+**脚本功能菜单：**
 
-### 方式二：Docker 部署（手动）
+运行 `./install.sh` 后，会进入交互式菜单，支持以下操作：
+
+| 选项 | 功能 | 说明 |
+|------|------|------|
+| **1** | 安装 Docker | 自动检测系统并安装 Docker |
+| **2** | 安装 Docker Compose | 安装 Docker Compose（如未安装） |
+| **3** | 配置环境变量 | 交互式配置 `.env` 文件 |
+| **4** | 构建 Docker 镜像 | 构建项目 Docker 镜像 |
+| **5** | 启动服务 | 启动 Trading AI 服务 |
+| **6** | 停止服务 | 停止运行中的服务 |
+| **7** | 重启服务 | 重启 Trading AI 服务 |
+| **8** | 查看日志 | 实时查看运行日志 |
+| **9** | 查看状态 | 查看容器运行状态 |
+| **C** | 清理/卸载 | 清理容器、镜像和数据 |
+| **0** | 退出 | 退出管理菜单 |
+
+**脚本特性：**
+- ✅ 自动检测 Docker/Docker Compose 安装状态
+- ✅ 支持 Ubuntu/Debian/CentOS/RHEL/Fedora
+- ✅ 智能菜单，实时显示系统状态
+- ✅ 彩色输出，操作提示清晰
+- ✅ 一键完成所有配置和部署
+
+### 方式二：Docker 手动部署
+
+如果不想使用安装脚本，可以手动部署：
 
 ```bash
-# 1. 构建镜像
-docker build -t trading-ai .
-
-# 2. 配置环境变量
+# 1. 配置环境变量
 cp env.example .env
-# 编辑 .env 文件
+# 编辑 .env 文件，填入你的配置
+
+# 2. 构建镜像
+docker build -t trading-ai .
+# 或使用 docker-compose
+docker-compose build
 
 # 3. 运行容器
 docker-compose up -d
 
 # 4. 查看日志
+docker-compose logs -f trading-ai
+```
+
+**常用命令：**
+```bash
+# 查看状态
+docker-compose ps
+
+# 停止服务
+docker-compose down
+
+# 重启服务
+docker-compose restart
+
+# 查看实时日志
 docker-compose logs -f
+
+# 进入容器
+docker-compose exec trading-ai bash
 ```
 
 详细说明：[DOCKER.md](./DOCKER.md)
 
-### 方式三：本地安装
+### 方式三：本地安装（不使用 Docker）
+
+适合开发者或想要直接运行 Python 代码的用户：
 
 #### 1. 安装依赖
 
+**Python 环境要求：**
+- Python 3.8 或更高版本
+- pip 包管理器
+
 ```bash
-# 安装Python依赖
+# 安装 Python 依赖
 pip install -r requirements.txt
 
-# 安装TA-Lib（可选，用于技术指标）
-# Windows: 下载whl文件安装
-# Linux/Mac: 见 docs/INSTALL.md
+# 安装 TA-Lib（可选，用于技术指标加速）
+# Windows: 下载对应的 whl 文件安装
+#   pip install TA_Lib-0.4.24-cp38-cp38-win_amd64.whl
+# Linux/Mac: 需要先编译安装 TA-Lib 库
+#   详见 docs/INSTALL.md
 ```
+
+> 💡 **提示**：如果不安装 TA-Lib，系统会自动使用纯 Python 实现（NumPy/Pandas），功能相同但速度稍慢。
 
 详细安装说明：[docs/INSTALL.md](./docs/INSTALL.md)
 
@@ -147,14 +206,16 @@ trading-ai/
 │   ├── utils/                # 工具函数
 │   └── proxy/                # 代理管理
 ├── logs/                      # 📝 日志文件
-├── main.py                    # 🎬 主程序
-├── requirements.txt           # 📦 依赖列表
-├── env.example                # ⚙️ 配置模板
-├── Dockerfile                 # 🐳 Docker 配置
+├── data/                      # 💾 数据文件（分析结果、上下文）
+├── main.py                    # 🎬 主程序入口
+├── install.sh                 # 🚀 一键安装脚本（推荐）
+├── requirements.txt           # 📦 Python 依赖列表
+├── env.example                # ⚙️ 环境变量配置模板
+├── Dockerfile                 # 🐳 Docker 镜像配置
 ├── docker-compose.yml         # 🐳 Docker Compose 配置
-├── DOCKER.md                  # 🐳 Docker 部署指南
+├── DOCKER.md                  # 🐳 Docker 部署详细指南
 ├── GITHUB.md                  # 📤 GitHub 上传指南
-└── README.md                  # 📋 本文件
+└── README.md                  # 📋 本文件（项目说明）
 ```
 
 ## 🎯 使用示例
@@ -260,7 +321,7 @@ LOG_RETENTION_HOURS=3              # 保留最近N小时的日志
 ## 💡 常见问题
 
 ### Q: 如何启用代理？
-A: 在 `.env` 中设置：
+**A:** 在 `.env` 文件中设置：
 ```env
 USE_PROXY=true
 PROXY_HOST=127.0.0.1
@@ -268,15 +329,48 @@ PROXY_PORT=7890
 ```
 
 ### Q: 如何调整扫描频率？
-A: 修改 `TIMEFRAME` 参数，支持 1m, 5m, 15m, 30m, 1h, 4h 等
+**A:** 修改 `.env` 中的 `TIMEFRAME` 参数，支持：
+- 分钟：`1m`, `3m`, `5m`, `15m`, `30m`
+- 小时：`1h`, `2h`, `4h`, `6h`, `8h`, `12h`
+- 天：`1d`, `3d`, `1w`, `1M`
 
 ### Q: 如何停止自动扫描？
-A: 按 `Ctrl+C` 即可优雅退出
+**A:** 按 `Ctrl+C` 即可优雅退出。如果使用 Docker，运行 `docker-compose stop`
 
 ### Q: 日志文件太大怎么办？
-A: 程序会自动清理超过指定时间的日志内容，默认保留3小时
+**A:** 程序会自动清理超过指定时间的日志内容，默认保留 3 小时。可以在 `.env` 中调整 `LOG_RETENTION_HOURS`
 
-更多问题请参考：[docs/AUTO_SCAN.md](./docs/AUTO_SCAN.md)
+### Q: Docker 安装失败怎么办？
+**A:** 
+- 检查网络连接
+- 确保有 sudo 权限
+- 查看详细错误信息：`./install.sh` 菜单选项 [1] 或 [2]
+- 手动安装：参考 [Docker 官方文档](https://docs.docker.com/get-docker/)
+
+### Q: 如何更新项目？
+**A:** 
+```bash
+# 使用 Git 拉取最新代码
+git pull origin main
+
+# 如果使用 Docker，重新构建镜像
+docker-compose build
+docker-compose up -d
+```
+
+### Q: 观察模式需要 API 密钥吗？
+**A:** 观察模式（`TRADING_ENVIRONMENT=observe`）不需要 API 密钥，可以安全测试所有功能（除了实际交易）
+
+### Q: 如何查看实时日志？
+**A:** 
+- 使用安装脚本：菜单选项 [8]
+- 手动：`docker-compose logs -f trading-ai`
+- 本地运行：日志保存在 `logs/` 目录
+
+### Q: 配置文件在哪里？
+**A:** 配置文件是 `.env`，位于项目根目录。首次使用可以通过 `./install.sh` 菜单选项 [3] 进行配置
+
+更多问题请参考：[docs/AUTO_SCAN.md](./docs/AUTO_SCAN.md) 或提交 [GitHub Issue](https://github.com/rdone4425/trading-ai/issues)
 
 ## 📝 许可证
 
