@@ -830,7 +830,7 @@
                 
                 if (result.success) {
                     allAnalysisData = result.data.recent_analysis || [];
-                    updateStats(result.data.stats_30d);
+                    updateStats(result.data.stats_30d, result.data.stats_7d);
                     updateAnalysisDisplay();
                     updateTrades(result.data.all_trades);
                     updateCharts(result.data);
@@ -847,7 +847,7 @@
         }
         
         // 更新统计卡片
-        function updateStats(stats) {
+        function updateStats(stats, stats7d = null) {
             document.getElementById('totalTrades').textContent = stats.total_trades;
             document.getElementById('periodDays').textContent = stats.period_days;
             document.getElementById('winRate').textContent = `${stats.win_rate}%`;
@@ -863,14 +863,43 @@
             document.getElementById('avgProfit').textContent = `+${stats.avg_profit} USDT`;
             document.getElementById('avgLoss').textContent = `-${stats.avg_loss} USDT`;
             
-            // 更新趋势指标
+            // 更新趋势指标（根据实际数据）
             const profitTrend = document.getElementById('profitTrend');
-            if (stats.net_profit >= 0) {
+            if (stats.total_trades === 0) {
+                profitTrend.textContent = '-';
+                profitTrend.className = 'trend-indicator';
+            } else if (stats.net_profit >= 0) {
                 profitTrend.className = 'trend-indicator trend-up';
-                profitTrend.textContent = '↑';
+                profitTrend.textContent = stats.roi > 0 ? `↑ ${stats.roi}%` : '持平';
             } else {
                 profitTrend.className = 'trend-indicator trend-down';
-                profitTrend.textContent = '↓';
+                profitTrend.textContent = `↓ ${Math.abs(stats.roi)}%`;
+            }
+            
+            // 更新盈亏比趋势
+            const plRatioTrend = document.getElementById('plRatioTrend');
+            if (stats.total_trades === 0) {
+                plRatioTrend.textContent = '-';
+            } else {
+                const plRatio = stats.profit_loss_ratio;
+                plRatioTrend.className = plRatio >= 2 ? 'trend-indicator trend-up' : 
+                                        plRatio >= 1 ? 'trend-indicator' : 
+                                        'trend-indicator trend-down';
+                plRatioTrend.textContent = plRatio >= 2 ? '优秀' : 
+                                          plRatio >= 1 ? '合格' : '待改进';
+            }
+            
+            // 更新胜率趋势
+            const winRateTrend = document.getElementById('winRateTrend');
+            if (stats.total_trades === 0) {
+                winRateTrend.textContent = '-';
+            } else {
+                const winRate = stats.win_rate;
+                winRateTrend.className = winRate >= 60 ? 'trend-indicator trend-up' : 
+                                        winRate >= 40 ? 'trend-indicator' : 
+                                        'trend-indicator trend-down';
+                winRateTrend.textContent = winRate >= 60 ? '优秀' : 
+                                          winRate >= 40 ? '正常' : '需提升';
             }
         }
         
