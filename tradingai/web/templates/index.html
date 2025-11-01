@@ -606,6 +606,13 @@
             margin-top: 12px;
         }
         
+        /* 确保在小屏幕上也能正确显示 */
+        @media (max-width: 768px) {
+            .analysis-details {
+                grid-template-columns: 1fr;
+            }
+        }
+        
         .detail-row {
             display: flex;
             flex-direction: column;
@@ -700,6 +707,10 @@
                 </div>
                 <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2);"></div>
             </div>
+            <a href="/review-learning" class="btn btn-primary" title="查看复盘学习结果">
+                <i class="fas fa-graduation-cap"></i>
+                复盘学习
+            </a>
             <button class="btn btn-primary" onclick="loadData()" title="刷新数据">
                 <i class="fas fa-sync-alt"></i>
                 刷新
@@ -719,7 +730,7 @@
             <div class="panel-header">
                 <h2 class="panel-title">
                     <i class="fas fa-chart-area"></i>
-                    收益曲线
+                    账户总金额曲线
                 </h2>
             </div>
             <div id="profitChart" class="chart-container"></div>
@@ -727,10 +738,16 @@
         
         <div class="content-panel">
             <div class="panel-header">
-                <h2 class="panel-title">
-                    <i class="fas fa-list-alt"></i>
-                    分析记录
-                </h2>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <h2 class="panel-title">
+                        <i class="fas fa-list-alt"></i>
+                        分析记录
+                    </h2>
+                    <span id="timeframeDisplay" style="font-size: 0.85em; color: var(--text-secondary); padding: 4px 12px; background: rgba(255, 255, 255, 0.05); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);">
+                        <i class="fas fa-clock" style="margin-right: 4px;"></i>
+                        时间周期: <span id="timeframeValue">-</span>
+                    </span>
+                </div>
                 <div class="filter-group">
                     <button class="filter-btn active" onclick="filterAnalysis('all')">全部</button>
                     <button class="filter-btn" onclick="filterAnalysis('long')">做多</button>
@@ -755,6 +772,36 @@
         let allAnalysisData = [];
         let currentFilter = 'all';
         
+        // 格式化日期时间
+        function formatDateTime(dateTimeStr) {
+            if (!dateTimeStr) return '未知';
+            
+            try {
+                const date = new Date(dateTimeStr);
+                if (isNaN(date.getTime())) {
+                    // 尝试解析中文格式 "2025-11-01 20:31:25"
+                    const match = dateTimeStr.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+                    if (match) {
+                        const [_, year, month, day, hour, minute, second] = match;
+                        return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+                    }
+                    return dateTimeStr;
+                }
+                
+                // 格式化为 "YYYY-MM-DD HH:mm:ss"
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hour = String(date.getHours()).padStart(2, '0');
+                const minute = String(date.getMinutes()).padStart(2, '0');
+                const second = String(date.getSeconds()).padStart(2, '0');
+                
+                return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+            } catch (e) {
+                return dateTimeStr;
+            }
+        }
+        
         // 格式化价格（智能选择小数位数）
         function formatPrice(price) {
             if (!price && price !== 0) return '-';
@@ -777,6 +824,164 @@
             }
         }
         
+        // 格式化运行时间（时钟格式：X天 X小时 X分 X秒）
+        function formatUptime(seconds) {
+            if (seconds === undefined || seconds === null || isNaN(seconds)) {
+                return '0天 0小时 0分 0秒';
+            }
+            
+            const totalSeconds = parseInt(seconds);
+            if (totalSeconds < 0) {
+                return '0天 0小时 0分 0秒';
+            }
+            
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const secs = totalSeconds % 60;
+            
+            // 始终显示所有单位，像时钟一样
+            return `${days}天 ${hours}小时 ${minutes}分 ${secs}秒`;
+        }
+        
+        // 格式化时间段（用于其他场景，保留原功能）
+        function formatPeriodDays(days) {
+            // 如果没有提供天数，使用默认值30天
+            const numDays = days === undefined || days === null || isNaN(days) ? 30 : parseInt(days);
+            
+            if (numDays <= 0) {
+                return '最近1天';
+            }
+            
+            // 如果小于1天，转换为小时和分钟
+            if (numDays < 1) {
+                const hours = Math.floor(numDays * 24);
+                const minutes = Math.floor((numDays * 24 - hours) * 60);
+                
+                if (hours > 0 && minutes > 0) {
+                    return `最近${hours}小时${minutes}分钟`;
+                } else if (hours > 0) {
+                    return `最近${hours}小时`;
+                } else if (minutes > 0) {
+                    return `最近${minutes}分钟`;
+                } else {
+                    return '最近1分钟';
+                }
+            }
+            
+            // 标准天数格式化
+            if (numDays === 1) {
+                return '最近1天';
+            } else if (numDays < 7) {
+                return `最近${numDays}天`;
+            } else if (numDays === 7) {
+                return '最近7天';
+            } else if (numDays < 30) {
+                return `最近${numDays}天`;
+            } else if (numDays === 30) {
+                return '最近30天';
+            } else if (numDays < 365) {
+                const months = Math.floor(numDays / 30);
+                const remainingDays = numDays % 30;
+                if (remainingDays === 0) {
+                    return `最近${months}个月`;
+                } else {
+                    const weeks = Math.floor(remainingDays / 7);
+                    const daysLeft = remainingDays % 7;
+                    if (weeks > 0 && daysLeft > 0) {
+                        return `最近${months}个月${weeks}周${daysLeft}天`;
+                    } else if (weeks > 0) {
+                        return `最近${months}个月${weeks}周`;
+                    } else {
+                        return `最近${months}个月${daysLeft}天`;
+                    }
+                }
+            } else {
+                const years = Math.floor(numDays / 365);
+                const remainingDays = numDays % 365;
+                if (remainingDays === 0) {
+                    return `最近${years}年`;
+                } else {
+                    const months = Math.floor(remainingDays / 30);
+                    const daysLeft = remainingDays % 30;
+                    if (months === 0 && daysLeft === 0) {
+                        return `最近${years}年`;
+                    } else if (months === 0) {
+                        return `最近${years}年${daysLeft}天`;
+                    } else if (daysLeft === 0) {
+                        return `最近${years}年${months}个月`;
+                    } else {
+                        return `最近${years}年${months}个月${daysLeft}天`;
+                    }
+                }
+            }
+        }
+        
+        // 运行时间相关的变量
+        let currentUptimeSeconds = 0;
+        
+        // 更新运行时间显示
+        function updateUptime(seconds) {
+            const uptimeDisplay = document.getElementById('uptimeDisplay');
+            if (uptimeDisplay) {
+                // 确保秒数是有效数字
+                const validSeconds = (seconds !== undefined && seconds !== null && !isNaN(seconds)) ? parseInt(seconds) : 0;
+                currentUptimeSeconds = Math.max(0, validSeconds);
+                uptimeDisplay.textContent = `运行时间: ${formatUptime(currentUptimeSeconds)}`;
+            }
+        }
+        
+        // 定期更新运行时间（每秒更新一次）
+        function startUptimeCounter() {
+            // 每秒自动增加1秒并更新显示
+            setInterval(() => {
+                if (currentUptimeSeconds >= 0) {
+                    currentUptimeSeconds += 1;
+                    const uptimeDisplay = document.getElementById('uptimeDisplay');
+                    if (uptimeDisplay) {
+                        uptimeDisplay.textContent = `运行时间: ${formatUptime(currentUptimeSeconds)}`;
+                    }
+                }
+            }, 1000);
+            
+            // 每10分钟从服务器同步一次运行时间（保持准确性，减少请求）
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/api/dashboard');
+                    const result = await response.json();
+                    if (result.success && result.data.uptime_seconds !== undefined) {
+                        currentUptimeSeconds = result.data.uptime_seconds;
+                        updateUptime(currentUptimeSeconds);
+                    }
+                } catch (error) {
+                    console.error('同步运行时间失败:', error);
+                }
+            }, 600000);  // 10分钟同步一次，大幅减少服务器请求
+        }
+        
+        // 更新时间周期显示
+        function updateTimeframe() {
+            const timeframeEl = document.getElementById('timeframeValue');
+            if (!timeframeEl) return;
+            
+            // 从分析数据中获取时间周期（取第一个有效的）
+            let timeframe = null;
+            if (allAnalysisData && allAnalysisData.length > 0) {
+                for (const item of allAnalysisData) {
+                    if (item.timeframe && item.timeframe !== 'N/A') {
+                        timeframe = item.timeframe;
+                        break;
+                    }
+                }
+            }
+            
+            if (timeframe) {
+                timeframeEl.textContent = timeframe;
+            } else {
+                timeframeEl.textContent = '-';
+            }
+        }
+        
         // 切换分析理由展开/收起
         function toggleReason(header) {
             const content = header.nextElementSibling;
@@ -787,9 +992,57 @@
         // 页面加载完成
         document.addEventListener('DOMContentLoaded', function() {
             loadData();
-            // 每30秒自动刷新
-            setInterval(loadData, 30000);
+            startUptimeCounter();  // 启动运行时间计数器
+            
+            // 移除自动刷新，只在用户手动刷新或分析完成后更新
+            // 如果需要自动刷新，可以手动点击刷新按钮或等待分析完成后自动更新
         });
+        
+        // 检查更新（不显示加载提示）
+        async function checkForUpdates() {
+            try {
+                const response = await fetch('/api/dashboard');
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 检查是否有新数据
+                    const newAnalysis = result.data.recent_analysis || [];
+                    const currentCount = allAnalysisData.length;
+                    
+                    // 如果有新数据，更新页面
+                    if (newAnalysis.length > currentCount || 
+                        (newAnalysis.length > 0 && allAnalysisData.length > 0 && 
+                         newAnalysis[0].analyzed_at !== allAnalysisData[0].analyzed_at)) {
+                        // 有新数据，更新页面
+                        allAnalysisData = newAnalysis;
+                        updateStats(result.data.stats_30d);
+                        updateAnalysisList();
+                        updateCharts(result.data);
+                        updateTimeframe();
+                        
+                        // 更新账户余额（显示来源标识）
+                        if (result.data.account_balance !== undefined && result.data.account_balance !== null) {
+                            const balance = parseFloat(result.data.account_balance).toFixed(2);
+                            const source = result.data.balance_source || 'config';
+                            const sourceText = source === 'exchange' ? '（实盘余额）' : '（配置值）';
+                            document.getElementById('accountBalance').textContent = 
+                                balance + ' USDT' + sourceText;
+                        }
+                        
+                        // 更新运行时间
+                        if (result.data.uptime_seconds !== undefined) {
+                            updateUptime(result.data.uptime_seconds);
+                        }
+                        
+                        // 显示通知（可选，不打扰用户）
+                        // showToast('发现新分析数据', 'info');
+                    }
+                }
+            } catch (error) {
+                // 静默失败，不显示错误
+                console.debug('检查更新失败:', error);
+            }
+        }
         
         // 显示通知
         function showToast(message, type = 'info') {
@@ -819,11 +1072,22 @@
                     updateAnalysisList();
                     updateCharts(result.data);
                     
-                    // 更新账户余额
+                    // 更新账户余额（显示来源标识）
                     if (result.data.account_balance !== undefined && result.data.account_balance !== null) {
+                        const balance = parseFloat(result.data.account_balance).toFixed(2);
+                        const source = result.data.balance_source || 'config';
+                        const sourceText = source === 'exchange' ? '（实盘余额）' : '（配置值）';
                         document.getElementById('accountBalance').textContent = 
-                            parseFloat(result.data.account_balance).toFixed(2) + ' USDT';
+                            balance + ' USDT' + sourceText;
                     }
+                    
+                    // 更新运行时间
+                    if (result.data.uptime_seconds !== undefined) {
+                        updateUptime(result.data.uptime_seconds);
+                    }
+                    
+                    // 更新时间周期（从分析数据中获取，显示第一个有效的时间周期）
+                    updateTimeframe();
                     
                     document.getElementById('timestamp').textContent = 
                         `最后更新: ${new Date(result.timestamp).toLocaleString('zh-CN')}`;
@@ -851,7 +1115,7 @@
                     </div>
                     <div class="stat-value">${stats.total_trades}</div>
                     <div class="stat-footer">
-                        <span>最近${stats.period_days}天</span>
+                        <span id="uptimeDisplay">加载中...</span>
                     </div>
                 </div>
                 
@@ -929,6 +1193,23 @@
                 );
             }
             
+            // 按时间倒序排序（最新的在最上面）
+            filteredData.sort((a, b) => {
+                // 获取时间字段（优先使用analyzed_at，其次使用timestamp）
+                const timeA = a.analyzed_at || a.timestamp || '';
+                const timeB = b.analyzed_at || b.timestamp || '';
+                
+                if (!timeA && !timeB) return 0;
+                if (!timeA) return 1;  // 没有时间的排后面
+                if (!timeB) return -1; // 有时间的排前面
+                
+                // 转换为时间戳进行比较（倒序）
+                const dateA = new Date(timeA).getTime();
+                const dateB = new Date(timeB).getTime();
+                
+                return dateB - dateA; // 倒序：最新的在前
+            });
+            
             if (!filteredData || filteredData.length === 0) {
                 listEl.innerHTML = `
                     <div class="empty-state">
@@ -973,7 +1254,7 @@
                                 止损价
                             </div>
                             <div class="detail-value" style="color: var(--danger-color);">
-                                ${item.stop_loss ? formatPrice(item.stop_loss) : '-'}
+                                ${(item.stop_loss !== undefined && item.stop_loss !== null && !isNaN(item.stop_loss) && item.stop_loss > 0) ? formatPrice(item.stop_loss) : '-'}
                             </div>
                         </div>
                         <div class="detail-row">
@@ -998,6 +1279,12 @@
                             </div>
                         </div>
                     </div>
+                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: space-between; font-size: 0.8em; color: var(--text-secondary);">
+                        <span>
+                            <i class="fas fa-clock" style="margin-right: 6px;"></i>
+                            分析时间: ${item.analyzed_at ? formatDateTime(item.analyzed_at) : (item.timestamp ? formatDateTime(item.timestamp) : '未知')}
+                        </span>
+                    </div>
                     ${item.reason ? `
                         <div class="analysis-reason">
                             <div class="reason-header" onclick="toggleReason(this)">
@@ -1020,31 +1307,40 @@
             }
             
             const trades = data.all_trades || [];
-            if (trades.length === 0) {
-                profitChart.setOption({
-                    title: {
-                        text: '暂无交易数据',
-                        left: 'center',
-                        top: 'middle',
-                        textStyle: {
-                            color: '#9ca3af',
-                            fontSize: 16
-                        }
-                    }
-                });
-                return;
-            }
             
+            // 获取初始账户余额（优先从账户余额获取，否则使用默认值）
+            const initialBalance = parseFloat(data.account_balance) || 10000;
+            
+            // 计算每个时间点的总金额（初始余额 + 累计收益）
             let cumulative = 0;
-            const profitData = trades.map((trade, index) => {
-                cumulative += trade.profit || 0;
-                return {
-                    time: trade.timestamp ? 
-                        new Date(trade.timestamp).toLocaleDateString('zh-CN', {month: '2-digit', day: '2-digit'}) : 
-                        `#${index+1}`,
-                    profit: cumulative.toFixed(2)
-                };
-            });
+            let balanceData = [];
+            
+            if (trades.length === 0) {
+                // 如果没有交易记录，显示初始余额（显示最近7天的数据点）
+                const today = new Date();
+                for (let i = 6; i >= 0; i--) {
+                    const date = new Date(today);
+                    date.setDate(date.getDate() - i);
+                    balanceData.push({
+                        time: date.toLocaleDateString('zh-CN', {month: '2-digit', day: '2-digit'}),
+                        balance: initialBalance,
+                        profit: 0
+                    });
+                }
+            } else {
+                // 有交易记录，计算累计总金额
+                balanceData = trades.map((trade, index) => {
+                    cumulative += trade.profit || 0;
+                    const totalBalance = initialBalance + cumulative;
+                    return {
+                        time: trade.timestamp ? 
+                            new Date(trade.timestamp).toLocaleDateString('zh-CN', {month: '2-digit', day: '2-digit'}) : 
+                            `#${index+1}`,
+                        balance: totalBalance,
+                        profit: cumulative
+                    };
+                });
+            }
             
             profitChart.setOption({
                 backgroundColor: 'transparent',
@@ -1052,7 +1348,17 @@
                     trigger: 'axis',
                     backgroundColor: 'rgba(0, 0, 0, 0.8)',
                     borderColor: '#667eea',
-                    textStyle: { color: '#e0e0e0' }
+                    textStyle: { color: '#e0e0e0' },
+                    formatter: function(params) {
+                        const param = params[0];
+                        const balance = parseFloat(param.value);
+                        const profit = param.data.profit || 0;
+                        const profitPercent = initialBalance > 0 ? ((profit / initialBalance) * 100).toFixed(2) : '0.00';
+                        return `${param.name}<br/>` +
+                               `总金额: <span style="color: #667eea; font-weight: bold;">${balance.toFixed(2)} USDT</span><br/>` +
+                               `累计收益: <span style="color: ${profit >= 0 ? '#10b981' : '#ef4444'}; font-weight: bold;">${profit >= 0 ? '+' : ''}${profit.toFixed(2)} USDT</span><br/>` +
+                               `收益率: <span style="color: ${profit >= 0 ? '#10b981' : '#ef4444'};">${profit >= 0 ? '+' : ''}${profitPercent}%</span>`;
+                    }
                 },
                 grid: {
                     left: '3%',
@@ -1062,7 +1368,7 @@
                 },
                 xAxis: {
                     type: 'category',
-                    data: profitData.map(d => d.time),
+                    data: balanceData.map(d => d.time),
                     axisLine: { lineStyle: { color: '#4b5563' } },
                     axisLabel: { color: '#9ca3af' }
                 },
@@ -1076,22 +1382,53 @@
                     splitLine: { lineStyle: { color: '#374151', type: 'dashed' } }
                 },
                 series: [{
-                    name: '累计收益',
+                    name: '账户总金额',
                     type: 'line',
-                    data: profitData.map(d => d.profit),
+                    data: balanceData.map(d => ({
+                        value: d.balance.toFixed(2),
+                        profit: d.profit
+                    })),
                     smooth: true,
-                    itemStyle: { color: '#667eea' },
+                    itemStyle: { 
+                        color: function(params) {
+                            // 根据当前金额相对于初始余额的变化来显示颜色
+                            const currentBalance = parseFloat(params.value);
+                            return currentBalance >= initialBalance ? '#10b981' : '#ef4444';
+                        }
+                    },
                     areaStyle: {
                         color: {
                             type: 'linear',
                             x: 0, y: 0, x2: 0, y2: 1,
                             colorStops: [
-                                { offset: 0, color: 'rgba(102, 126, 234, 0.3)' },
-                                { offset: 1, color: 'rgba(102, 126, 234, 0.05)' }
+                                { offset: 0, color: 'rgba(16, 185, 129, 0.3)' }, // 绿色渐变
+                                { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
                             ]
                         }
                     },
-                    lineStyle: { width: 3 }
+                    lineStyle: { 
+                        width: 3,
+                        color: function(params) {
+                            const currentBalance = parseFloat(params.value);
+                            return currentBalance >= initialBalance ? '#10b981' : '#ef4444';
+                        }
+                    },
+                    markLine: {
+                        silent: true,
+                        data: [{
+                            yAxis: initialBalance,
+                            lineStyle: {
+                                color: '#9ca3af',
+                                type: 'dashed',
+                                width: 1
+                            },
+                            label: {
+                                formatter: '初始余额: ' + initialBalance.toFixed(2) + ' USDT',
+                                position: 'right',
+                                color: '#9ca3af'
+                            }
+                        }]
+                    }
                 }]
             });
         }

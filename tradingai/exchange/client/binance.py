@@ -67,16 +67,33 @@ class BinanceClient:
         except aiohttp.ClientError as e:
             raise Exception(f"网络错误: {e}")
     
-    async def get_symbols(self, limit: int = 50) -> List[str]:
-        """获取交易对列表"""
+    async def get_symbols(self, limit: int = 0) -> List[str]:
+        """
+        获取永续合约交易对列表
+        
+        Args:
+            limit: 返回数量限制，0表示不限制（返回所有符合条件的交易对）
+        
+        Returns:
+            永续合约交易对列表（仅USDT计价，状态为TRADING）
+        """
         data = await self._request("GET", "/fapi/v1/exchangeInfo")
         symbols = []
         for item in data.get("symbols", []):
-            if (item["symbol"].endswith("USDT") and 
-                item["status"] == "TRADING" and
-                item.get("contractType") == "PERPETUAL"):
-                symbols.append(item["symbol"])
-        return symbols[:limit]
+            symbol = item.get("symbol", "")
+            status = item.get("status", "")
+            contract_type = item.get("contractType", "")
+            
+            # 严格筛选：必须是永续合约、TRADING状态、USDT计价
+            if (symbol.endswith("USDT") and 
+                status == "TRADING" and
+                contract_type == "PERPETUAL"):
+                symbols.append(symbol)
+        
+        # 如果limit > 0，则限制返回数量
+        if limit > 0:
+            return symbols[:limit]
+        return symbols
     
     async def get_klines(self, symbol: str, interval: str = "1h", limit: int = 100, include_current: bool = False, start_time: int = None, end_time: int = None) -> List[Dict]:
         """
@@ -312,15 +329,26 @@ class BinanceClient:
         }
     
     async def get_all_tickers_24h(self) -> List[Dict]:
-        """获取所有交易对24小时行情（统一格式）"""
+        """
+        获取所有永续合约交易对的24小时行情（统一格式）
+        
+        注意：只返回永续合约（PERPETUAL），不包括季度合约等其他类型
+        """
+        # 先获取所有永续合约交易对列表
+        perpetual_symbols = await self.get_symbols(limit=0)  # limit=0表示获取所有
+        perpetual_set = set(perpetual_symbols)
+        
+        # 获取所有交易对24小时行情
         data = await self._request("GET", "/fapi/v1/ticker/24hr")
         
-        # 只要USDT合约，并统一格式
+        # 只保留永续合约（USDT计价，且在perpetual_symbols列表中）
         tickers = []
         for item in data:
-            if item["symbol"].endswith("USDT"):
+            symbol = item["symbol"]
+            # 双重验证：既是USDT计价，又在永续合约列表中
+            if symbol.endswith("USDT") and symbol in perpetual_set:
                 tickers.append({
-                    "symbol": item["symbol"],
+                    "symbol": symbol,
                     "price": float(item["lastPrice"]),
                     "price_change": float(item["priceChange"]),
                     "price_change_percent": float(item["priceChangePercent"]),

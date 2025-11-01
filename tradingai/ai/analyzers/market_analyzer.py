@@ -188,9 +188,12 @@ class MarketAnalyzer:
             logger.debug(f"  - 有效指标数: {valid_indicators} 个")
             logger.debug(f"  - 指标列表: {list(indicators.keys())}")
             
+            # 存储timeframe供后续使用
+            self.timeframe = timeframe or "1h"
+            
             # 1. 准备数据（使用扫描器传递的K线和指标）
             market_data = self._prepare_analysis_data(
-                symbol, klines, indicators, timeframe
+                symbol, klines, indicators, self.timeframe
             )
             
             logger.debug(f"📋 格式化后的市场数据（传递给AI）:")
@@ -742,31 +745,65 @@ class MarketAnalyzer:
                     lines.append(f"  - {weakness}")
                 lines.append("")
         
-        # 2. 格式化优化后的策略（优先显示）
+        # 2. 格式化优化后的策略（优先显示，支持多策略选择）
         if self.optimized_strategies:
-            lines.append("🎯 优化后的交易策略（请严格按照执行）：")
-            for i, strategy in enumerate(self.optimized_strategies[-3:], 1):  # 最近3条策略
+            strategies_to_show = self.optimized_strategies[-5:]  # 显示最近5条策略，给AI更多选择
+            strategy_count = len(strategies_to_show)
+            
+            if strategy_count > 1:
+                lines.append(f"🎯 优化后的交易策略库（共{strategy_count}个策略，请根据当前市场环境选择最匹配的策略）：")
+                lines.append("⚠️ 重要：不要固定使用同一个策略，要根据每个交易对的市场特征（趋势、波动性、成交量等）选择最合适的策略！")
+            else:
+                lines.append("🎯 优化后的交易策略（请根据市场环境判断是否适用）：")
+            
+            for i, strategy in enumerate(strategies_to_show, 1):
                 strategy_name = strategy.get('strategy_name', f'策略{i}')
                 strategy_rules = strategy.get('rules', [])
                 conditions = strategy.get('entry_conditions', [])
                 exit_rules = strategy.get('exit_rules', [])
+                market_context = strategy.get('market_context', '')  # 策略适用市场环境
                 
-                lines.append(f"\n  【{strategy_name}】")
+                lines.append(f"\n  【策略{i}: {strategy_name}】")
+                
+                # 如果有市场环境描述，显示适用场景
+                if market_context:
+                    lines.append(f"  适用场景: {market_context}")
+                elif i == 1 and strategy_count > 1:
+                    # 如果多个策略但没有场景描述，提示AI需要评估
+                    lines.append("  ⚠️ 注意：请根据当前市场特征评估是否适合使用此策略")
                 
                 if strategy_rules:
                     lines.append("  核心规则：")
-                    for rule in strategy_rules[:3]:  # 最多3条
+                    for rule in strategy_rules[:4]:  # 最多4条规则
                         lines.append(f"    • {rule}")
                 
                 if conditions:
                     lines.append("  入场条件：")
-                    for condition in conditions[:3]:  # 最多3条
+                    for condition in conditions[:4]:  # 最多4条条件
                         lines.append(f"    ✓ {condition}")
                 
                 if exit_rules:
                     lines.append("  出场规则：")
-                    for rule in exit_rules[:2]:  # 最多2条
+                    for rule in exit_rules[:3]:  # 最多3条
                         lines.append(f"    → {rule}")
+            
+            if strategy_count > 1:
+                lines.append("\n📋 策略选择与创建指南：")
+                lines.append("  【使用现有策略】")
+                lines.append("  - 趋势明显（EMA多空排列清晰）→ 优先选择趋势跟随策略")
+                lines.append("  - 震荡横盘（价格在区间内波动）→ 优先选择区间交易策略")
+                lines.append("  - 突破信号（价格突破关键阻力/支撑）→ 优先选择突破策略")
+                lines.append("  - 成交量放大 → 优先选择动量策略")
+                lines.append("  【创建混合策略】")
+                lines.append("  - 可以结合多个策略的优点创建新策略（例如：策略1的入场条件 + 策略2的止损规则）")
+                lines.append("  - 在trading_standard中说明：'基于策略X和策略Y创建的混合策略'")
+                lines.append("  【优化现有策略】")
+                lines.append("  - 如果策略条件不完全匹配，可以调整规则以适应当前市场")
+                lines.append("  - 在trading_standard中说明：'基于策略X优化的自定义策略'")
+                lines.append("  【创建全新策略】")
+                lines.append("  - 如果现有策略都不适合，基于当前市场特征创建新策略")
+                lines.append("  - 在trading_standard中说明：'基于当前市场特征创建的自定义策略'")
+                lines.append("  - 市场不明确 → 可以观望或创建保守策略")
             
             lines.append("")
         
@@ -1114,7 +1151,8 @@ class MarketAnalyzer:
                     "risk_reward_ratio": data.get("risk_reward_ratio", "N/A"),
                     "trading_standard": data.get("trading_standard", "未提供"),
                     "reason": data.get("reason", ""),
-                    "warnings": data.get("warnings", [])
+                    "warnings": data.get("warnings", []),
+                    "timeframe": self.timeframe  # 添加TIMEFRAME字段
                 }
                 
                 logger.debug(f"✅ 成功解析 JSON 响应")
@@ -1162,7 +1200,8 @@ class MarketAnalyzer:
             "risk_reward_ratio": "N/A",
             "reason": response,
             "warnings": ["AI 响应未使用 JSON 格式，解析可能不准确"],
-            "trading_standard": "未提供"
+            "trading_standard": "未提供",
+            "timeframe": self.timeframe  # 添加TIMEFRAME字段
         }
     
     async def _enhance_with_risk_management(

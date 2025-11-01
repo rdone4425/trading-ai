@@ -12,6 +12,7 @@ import logging
 
 from flask import Flask, render_template, jsonify, send_from_directory, request
 from flask_cors import CORS
+from datetime import datetime
 
 from .stats import TradingStats
 
@@ -36,6 +37,7 @@ class WebServer:
         self.data_dir = data_dir
         self.platform = platform
         self.stats = TradingStats(data_dir)
+        self.start_time = datetime.now()  # 记录启动时间
         
         # 创建Flask应用
         self.app = Flask(__name__, 
@@ -55,6 +57,11 @@ class WebServer:
         def index():
             """主页"""
             return render_template('index.html')
+        
+        @self.app.route('/review-learning')
+        def review_learning():
+            """复盘学习结果页面"""
+            return render_template('review_learning.html')
         
         @self.app.route('/api/stats')
         def get_stats():
@@ -114,6 +121,7 @@ class WebServer:
                 
                 # 获取真实账户余额（优先从交易所获取）
                 account_balance = None
+                balance_source = 'config'  # 默认来源为配置值
                 if self.platform:
                     try:
                         import asyncio
@@ -123,6 +131,7 @@ class WebServer:
                         balance = loop.run_until_complete(self.platform.get_balance())
                         if balance and balance > 0:
                             account_balance = balance
+                            balance_source = 'exchange'  # 来自交易所
                         loop.close()
                     except Exception as e:
                         logger.debug(f"从交易所获取余额失败: {e}")
@@ -132,11 +141,17 @@ class WebServer:
                     try:
                         from tradingai import config
                         account_balance = getattr(config, 'ACCOUNT_BALANCE', None)
+                        balance_source = 'config'  # 来自配置
                     except:
                         pass
                 
+                # 计算系统运行时间
+                uptime_seconds = (datetime.now() - self.start_time).total_seconds()
+                
                 # 添加到返回数据中
                 data['account_balance'] = account_balance
+                data['balance_source'] = balance_source  # 余额来源标识
+                data['uptime_seconds'] = uptime_seconds
                 
                 return jsonify({
                     'success': True,
@@ -223,6 +238,84 @@ class WebServer:
                     'success': False,
                     'error': str(e),
                     'balance': 0
+                }), 500
+        
+        @self.app.route('/api/review-knowledge')
+        def get_review_knowledge():
+            """获取复盘知识"""
+            try:
+                from tradingai.ai.context_manager import ContextManager
+                context_manager = ContextManager()
+                
+                # 同步加载（在Flask上下文中）
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                knowledge = loop.run_until_complete(context_manager.load_review_knowledge())
+                loop.close()
+                
+                return jsonify({
+                    'success': True,
+                    'data': knowledge
+                })
+            except Exception as e:
+                logger.error(f"获取复盘知识失败: {e}", exc_info=True)
+                return jsonify({
+                    'success': False,
+                    'error': str(e),
+                    'data': []
+                }), 500
+        
+        @self.app.route('/api/optimized-strategies')
+        def get_optimized_strategies():
+            """获取优化策略"""
+            try:
+                from tradingai.ai.context_manager import ContextManager
+                context_manager = ContextManager()
+                
+                # 同步加载
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                strategies = loop.run_until_complete(context_manager.load_optimized_strategies())
+                loop.close()
+                
+                return jsonify({
+                    'success': True,
+                    'data': strategies
+                })
+            except Exception as e:
+                logger.error(f"获取优化策略失败: {e}", exc_info=True)
+                return jsonify({
+                    'success': False,
+                    'error': str(e),
+                    'data': []
+                }), 500
+        
+        @self.app.route('/api/learning-results')
+        def get_learning_results():
+            """获取学习结果"""
+            try:
+                from tradingai.ai.context_manager import ContextManager
+                context_manager = ContextManager()
+                
+                # 同步加载
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                results = loop.run_until_complete(context_manager.load_learning_results())
+                loop.close()
+                
+                return jsonify({
+                    'success': True,
+                    'data': results
+                })
+            except Exception as e:
+                logger.error(f"获取学习结果失败: {e}", exc_info=True)
+                return jsonify({
+                    'success': False,
+                    'error': str(e),
+                    'data': []
                 }), 500
         
         @self.app.route('/health')

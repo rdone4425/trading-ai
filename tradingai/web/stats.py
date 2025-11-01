@@ -81,11 +81,26 @@ class TradingStats:
                             results.extend(data)
                         
                     if len(results) >= limit:
-                        return results[:limit]
+                        break
                 except Exception as e:
                     logger.warning(f"读取分析文件失败 {file}: {e}")
-                    
-        return results
+        
+        # 按时间倒序排序（最新的在前）
+        # 优先使用analyzed_at，其次使用timestamp
+        def get_sort_time(item):
+            time_str = item.get('analyzed_at') or item.get('timestamp') or ''
+            if not time_str:
+                return 0
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(time_str.replace('Z', '+00:00')) if 'T' in time_str else datetime.fromtimestamp(0)
+                return dt.timestamp()
+            except:
+                return 0
+        
+        results.sort(key=get_sort_time, reverse=True)
+        
+        return results[:limit] if limit > 0 else results
     
     def load_trades(self) -> List[Dict[str, Any]]:
         """

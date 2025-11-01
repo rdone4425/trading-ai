@@ -15,6 +15,7 @@ from tradingai.ai.analyzers import MarketAnalyzer
 from tradingai.trader import Trader
 from tradingai.logger import get_logger
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 # 初始化日志
 logger = get_logger("main")
@@ -189,9 +190,24 @@ async def perform_review_from_history(
             
             logger.info(f"  📋 复盘最近1天的 {len(recent_trades)} 笔完整交易")
             
+            # 加载已复盘的交易对记录
+            context_manager = analyzer.context_manager
+            reviewed_symbols = await context_manager.load_reviewed_symbols()
+            
+            reviewed_count = 0
+            skipped_count = 0
+            
             for i, trade in enumerate(recent_trades, 1):
                 try:
-                    logger.info(f"\n  [{i}/{len(recent_trades)}] 复盘: {trade.get('symbol', 'N/A')}")
+                    symbol = trade.get('symbol', 'N/A')
+                    
+                    # 检查该交易对是否已经复盘过
+                    if context_manager.is_symbol_reviewed(symbol, reviewed_symbols):
+                        logger.info(f"\n  [{i}/{len(recent_trades)}] 跳过: {symbol} (已复盘过)")
+                        skipped_count += 1
+                        continue
+                    
+                    logger.info(f"\n  [{i}/{len(recent_trades)}] 复盘: {symbol}")
                     
                     # 调用复盘功能
                     review_result = await analyzer.review_trade(trade)
@@ -199,6 +215,15 @@ async def perform_review_from_history(
                     # 将复盘结果添加到知识库（供后续分析使用）
                     # 同时自动优化策略（从复盘结果中提取并生成优化策略）
                     await analyzer.add_review_knowledge(review_result)
+                    
+                    # 记录该交易对已复盘
+                    await context_manager.save_reviewed_symbol(symbol, trade)
+                    reviewed_symbols[symbol] = {
+                        "symbol": symbol,
+                        "reviewed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "trade_info": trade
+                    }
+                    reviewed_count += 1
                     
                     # 提取改进建议
                     improvements = review_result.get('improvements', [])
@@ -219,6 +244,11 @@ async def perform_review_from_history(
                     
                 except Exception as e:
                     logger.warning(f"    ⚠️  复盘失败: {e}")
+            
+            if skipped_count > 0:
+                logger.info(f"\n  ⏭️  跳过已复盘的交易对: {skipped_count} 个")
+            if reviewed_count > 0:
+                logger.info(f"\n  ✅ 本次新复盘: {reviewed_count} 个交易对")
             
             logger.info(f"\n  ✅ 复盘完成，改进建议和优化策略已应用到后续分析")
             logger.info(f"  📚 复盘知识库: {analyzer.get_review_knowledge_count()} 条经验")

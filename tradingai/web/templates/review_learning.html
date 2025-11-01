@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>复盘学习结果 - Trading AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid transparent;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .tab:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+        }
+
+        .content-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel-title {
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .item-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s;
+        }
+
+        .item-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .item-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .item-meta {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: flex-end;
+        }
+
+        .item-content {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .item-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .tag {
+            padding: 4px 12px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 16px;
+            font-size: 12px;
+            color: #a5b4fc;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .badge-info {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <i class="fas fa-graduation-cap"></i>
+                复盘学习结果
+            </h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="loadData()">
+                    <i class="fas fa-sync-alt"></i>
+                    刷新
+                </button>
+                <a href="/" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i>
+                    返回首页
+                </a>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('review')">
+                <i class="fas fa-clipboard-list"></i>
+                复盘知识
+            </div>
+            <div class="tab" onclick="switchTab('strategies')">
+                <i class="fas fa-chess"></i>
+                优化策略
+            </div>
+            <div class="tab" onclick="switchTab('learning')">
+                <i class="fas fa-book"></i>
+                学习结果
+            </div>
+        </div>
+
+        <div id="statsPanel" class="content-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">
+                    <i class="fas fa-chart-bar"></i>
+                    统计信息
+                </h2>
+            </div>
+            <div class="stats-grid" id="statsGrid">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                </div>
+            </div>
+        </div>
+
+        <div id="contentPanel" class="content-panel">
+            <div id="content">
+                <div class="loading">
+                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'review';
+        let reviewData = [];
+        let strategiesData = [];
+        let learningData = [];
+
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // 更新标签样式
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.closest('.tab').classList.add('active');
+            
+            // 加载对应数据
+            loadTabContent();
+        }
+
+        async function loadData() {
+            try {
+                const [reviewRes, strategiesRes, learningRes] = await Promise.all([
+                    fetch('/api/review-knowledge'),
+                    fetch('/api/optimized-strategies'),
+                    fetch('/api/learning-results')
+                ]);
+
+                reviewData = (await reviewRes.json()).data || [];
+                strategiesData = (await strategiesRes.json()).data || [];
+                learningData = (await learningRes.json()).data || [];
+
+                updateStats();
+                loadTabContent();
+            } catch (error) {
+                console.error('加载失败:', error);
+                showError('数据加载失败，请刷新重试');
+            }
+        }
+
+        function updateStats() {
+            const statsHTML = `
+                <div class="stat-card fade-in">
+                    <div class="stat-label">复盘知识条数</div>
+                    <div class="stat-value">${reviewData.length}</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-label">优化策略数</div>
+                    <div class="stat-value">${strategiesData.length}</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-label">学习结果数</div>
+                    <div class="stat-value">${learningData.length}</div>
+                </div>
+                <div class="stat-card fade-in">
+                    <div class="stat-label">总知识量</div>
+                    <div class="stat-value">${reviewData.length + strategiesData.length + learningData.length}</div>
+                </div>
+            `;
+            document.getElementById('statsGrid').innerHTML = statsHTML;
+        }
+
+        function loadTabContent() {
+            const contentDiv = document.getElementById('content');
+            
+            switch(currentTab) {
+                case 'review':
+                    renderReviewKnowledge();
+                    break;
+                case 'strategies':
+                    renderStrategies();
+                    break;
+                case 'learning':
+                    renderLearningResults();
+                    break;
+            }
+        }
+
+        function renderReviewKnowledge() {
+            const contentDiv = document.getElementById('content');
+            
+            if (reviewData.length === 0) {
+                contentDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i class="fas fa-inbox"></i></div>
+                        <div class="empty-state-title">暂无复盘知识</div>
+                        <div>系统会自动复盘历史交易并生成知识</div>
+                    </div>
+                `;
+                return;
+            }
+
+            contentDiv.innerHTML = reviewData.map((item, index) => {
+                const rating = item.overall_rating || '未知';
+                const ratingBadge = rating.includes('优秀') || rating.includes('良好') ? 
+                    '<span class="badge badge-success">优秀</span>' :
+                    rating.includes('一般') ? '<span class="badge badge-warning">一般</span>' :
+                    '<span class="badge badge-info">待改进</span>';
+
+                return `
+                    <div class="item-card fade-in">
+                        <div class="item-header">
+                            <div class="item-title">
+                                <i class="fas fa-file-alt"></i>
+                                ${item.symbol || '未知交易对'} - ${item.direction || '未知方向'}
+                            </div>
+                            <div class="item-meta">
+                                ${ratingBadge}
+                                <span>${item.reviewed_at || '未知时间'}</span>
+                            </div>
+                        </div>
+                        <div class="item-content">
+                            <strong>总体评价：</strong>${item.overall_rating || '未提供'}<br><br>
+                            ${item.summary ? `<strong>总结：</strong>${item.summary}<br><br>` : ''}
+                            ${item.improvements && item.improvements.length > 0 ? 
+                                `<strong>改进建议：</strong><br>${item.improvements.map(imp => `• ${imp}`).join('<br>')}<br><br>` : ''}
+                            ${item.lessons_learned && item.lessons_learned.length > 0 ?
+                                `<strong>经验教训：</strong><br>${item.lessons_learned.map(lesson => `• ${lesson}`).join('<br>')}` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderStrategies() {
+            const contentDiv = document.getElementById('content');
+            
+            if (strategiesData.length === 0) {
+                contentDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i class="fas fa-inbox"></i></div>
+                        <div class="empty-state-title">暂无优化策略</div>
+                        <div>系统会基于复盘结果自动生成优化策略</div>
+                    </div>
+                `;
+                return;
+            }
+
+            contentDiv.innerHTML = strategiesData.map((item, index) => {
+                return `
+                    <div class="item-card fade-in">
+                        <div class="item-header">
+                            <div class="item-title">
+                                <i class="fas fa-chess"></i>
+                                ${item.strategy_name || '未命名策略'}
+                            </div>
+                            <div class="item-meta">
+                                <span class="badge badge-info">优化策略</span>
+                                <span>${item.created_at || '未知时间'}</span>
+                            </div>
+                        </div>
+                        <div class="item-content">
+                            ${item.description ? `<strong>描述：</strong>${item.description}<br><br>` : ''}
+                            ${item.rules && item.rules.length > 0 ? 
+                                `<strong>策略规则：</strong><br>${item.rules.map(rule => `• ${rule}`).join('<br>')}<br><br>` : ''}
+                            ${item.conditions && item.conditions.length > 0 ?
+                                `<strong>适用条件：</strong><br>${item.conditions.map(cond => `• ${cond}`).join('<br>')}` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderLearningResults() {
+            const contentDiv = document.getElementById('content');
+            
+            if (learningData.length === 0) {
+                contentDiv.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i class="fas fa-inbox"></i></div>
+                        <div class="empty-state-title">暂无学习结果</div>
+                        <div>系统会自动从分析结果中学习并生成知识</div>
+                    </div>
+                `;
+                return;
+            }
+
+            contentDiv.innerHTML = learningData.map((item, index) => {
+                return `
+                    <div class="item-card fade-in">
+                        <div class="item-header">
+                            <div class="item-title">
+                                <i class="fas fa-book"></i>
+                                ${item.topic || '未命名主题'}
+                            </div>
+                            <div class="item-meta">
+                                <span class="badge badge-info">${item.level || '中级'}</span>
+                                <span>${item.learned_at || '未知时间'}</span>
+                            </div>
+                        </div>
+                        <div class="item-content">
+                            ${item.content ? item.content : '暂无内容'}
+                        </div>
+                        ${item.key_points && item.key_points.length > 0 ?
+                            `<div class="item-tags">
+                                ${item.key_points.map(point => `<span class="tag">${point}</span>`).join('')}
+                            </div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showError(message) {
+            const contentDiv = document.getElementById('content');
+            contentDiv.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="empty-state-title">${message}</div>
+                </div>
+            `;
+        }
+
+        // 页面加载时自动加载数据
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            // 每60秒自动刷新
+            setInterval(loadData, 60000);
+        });
+    </script>
+</body>
+</html>
+

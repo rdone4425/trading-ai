@@ -59,6 +59,7 @@ class ContextManager:
         self.review_knowledge_file = self.context_dir / "review_knowledge.json"
         self.strategies_file = self.context_dir / "optimized_strategies.json"
         self.learning_file = self.context_dir / "learning_results.json"
+        self.reviewed_symbols_file = self.context_dir / "reviewed_symbols.json"
         
         logger.info(f"📁 上下文存储目录: {self.context_dir}")
     
@@ -351,6 +352,10 @@ class ContextManager:
                 self.learning_file.unlink()
                 deleted.append("学习结果")
             
+            if self.reviewed_symbols_file.exists():
+                self.reviewed_symbols_file.unlink()
+                deleted.append("已复盘交易对")
+            
             if deleted:
                 logger.info(f"🗑️  已清空上下文数据: {', '.join(deleted)}")
             else:
@@ -411,4 +416,99 @@ class ContextManager:
             logger.warning(f"⚠️  获取上下文统计失败: {e}")
         
         return stats
+    
+    async def save_reviewed_symbol(self, symbol: str, trade_info: Dict[str, Any] = None) -> bool:
+        """
+        记录已复盘的交易对
+        
+        Args:
+            symbol: 交易对符号
+            trade_info: 交易信息（可选）
+        
+        Returns:
+            是否保存成功
+        """
+        try:
+            # 加载现有的已复盘记录
+            reviewed_symbols = await self.load_reviewed_symbols()
+            
+            # 添加或更新记录
+            reviewed_symbols[symbol] = {
+                "symbol": symbol,
+                "reviewed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "trade_info": trade_info or {}
+            }
+            
+            # 保存到文件
+            data = {
+                "version": "1.0",
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "count": len(reviewed_symbols),
+                "reviewed_symbols": reviewed_symbols
+            }
+            
+            if HAS_AIOFILES:
+                async with aiofiles.open(self.reviewed_symbols_file, 'w', encoding='utf-8') as f:
+                    await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+            else:
+                with open(self.reviewed_symbols_file, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            logger.debug(f"✅ 已记录已复盘交易对: {symbol}")
+            return True
+        
+        except Exception as e:
+            logger.error(f"❌ 记录已复盘交易对失败: {e}", exc_info=True)
+            return False
+    
+    async def load_reviewed_symbols(self) -> Dict[str, Dict[str, Any]]:
+        """
+        加载已复盘的交易对记录
+        
+        Returns:
+            已复盘交易对字典 {symbol: {reviewed_at, trade_info}}
+        """
+        try:
+            if not self.reviewed_symbols_file.exists():
+                return {}
+            
+            if HAS_AIOFILES:
+                async with aiofiles.open(self.reviewed_symbols_file, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+                    data = json.loads(content)
+            else:
+                with open(self.reviewed_symbols_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            
+            return data.get("reviewed_symbols", {})
+        
+        except Exception as e:
+            logger.warning(f"⚠️  加载已复盘交易对记录失败: {e}")
+            return {}
+    
+    def is_symbol_reviewed(self, symbol: str, reviewed_symbols: Dict[str, Dict[str, Any]] = None) -> bool:
+        """
+        检查交易对是否已经复盘过
+        
+        Args:
+            symbol: 交易对符号
+            reviewed_symbols: 已复盘交易对字典（可选，如果不提供则自动加载）
+        
+        Returns:
+            是否已复盘
+        """
+        if reviewed_symbols is None:
+            # 同步加载（仅用于检查，性能考虑）
+            try:
+                if not self.reviewed_symbols_file.exists():
+                    return False
+                
+                with open(self.reviewed_symbols_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                reviewed_symbols = data.get("reviewed_symbols", {})
+            except:
+                return False
+        
+        return symbol in reviewed_symbols
 
