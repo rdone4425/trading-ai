@@ -161,7 +161,7 @@ install_docker() {
     esac
 }
 
-# 安装 Docker Compose（独立版本）
+# 安装 Docker Compose（独立版本，用于兼容旧系统）
 install_docker_compose_standalone() {
     print_info "正在安装 Docker Compose..."
     
@@ -176,6 +176,56 @@ install_docker_compose_standalone() {
     
     print_success "Docker Compose 安装完成"
     sleep 1
+}
+
+# 安装 Docker 和 Docker Compose（合并功能）
+install_docker_and_compose() {
+    print_header "安装 Docker 和 Docker Compose"
+    
+    # 检查 Docker
+    docker_installed=false
+    if check_docker; then
+        print_info "Docker 已安装"
+        docker_installed=true
+    else
+        print_info "正在安装 Docker..."
+        install_docker
+        if [ $? -eq 0 ]; then
+            docker_installed=true
+        else
+            print_error "Docker 安装失败"
+            read -p "按 Enter 继续..."
+            return 1
+        fi
+    fi
+    
+    # 更新 COMPOSE_CMD（Docker 安装后可能需要重新检测）
+    COMPOSE_CMD=$(get_compose_cmd)
+    
+    # 检查 Docker Compose
+    if check_docker_compose; then
+        print_info "Docker Compose 已安装"
+    else
+        print_info "正在安装 Docker Compose..."
+        # Docker Compose v2 通常随 Docker 一起安装，如果没有则安装独立版本
+        install_docker_compose_standalone
+    fi
+    
+    # 最终检测
+    COMPOSE_CMD=$(get_compose_cmd)
+    if ! check_docker || ! check_docker_compose; then
+        print_error "安装未完全成功，请检查错误信息"
+        read -p "按 Enter 继续..."
+        return 1
+    fi
+    
+    print_success "Docker 和 Docker Compose 安装完成！"
+    
+    if ! $docker_installed && [ "$EUID" -ne 0 ]; then
+        print_warning "如果这是首次安装 Docker，可能需要重新登录或运行 'newgrp docker'"
+    fi
+    
+    read -p "按 Enter 继续..."
 }
 
 # 交互式配置环境变量
@@ -717,17 +767,16 @@ show_menu() {
     echo "  [U] 下载/更新项目（自动检测：不存在则下载，存在则更新）"
     echo ""
     echo -e "${GREEN}环境准备：${NC}"
-    echo "  [1] 安装 Docker"
-    echo "  [2] 安装 Docker Compose"
-    echo "  [3] 配置环境变量"
+    echo "  [1] 安装 Docker 和 Docker Compose（自动检测并安装缺失组件）"
+    echo "  [2] 配置环境变量"
     echo ""
     echo -e "${GREEN}服务管理：${NC}"
-    echo "  [4] 构建 Docker 镜像"
-    echo "  [5] 启动服务"
-    echo "  [6] 停止服务"
-    echo "  [7] 重启服务"
-    echo "  [8] 查看日志"
-    echo "  [9] 查看状态"
+    echo "  [3] 构建 Docker 镜像"
+    echo "  [4] 启动服务"
+    echo "  [5] 停止服务"
+    echo "  [6] 重启服务"
+    echo "  [7] 查看日志"
+    echo "  [8] 查看状态"
     echo ""
     echo -e "${GREEN}其他：${NC}"
     echo "  [C] 清理/卸载"
@@ -784,41 +833,28 @@ main() {
                 fi
                 ;;
             1)
-                if check_docker; then
-                    print_info "Docker 已安装"
-                    read -p "按 Enter 继续..."
-                else
-                    install_docker
-                    COMPOSE_CMD=$(get_compose_cmd)
-                fi
+                install_docker_and_compose
+                COMPOSE_CMD=$(get_compose_cmd)
                 ;;
             2)
-                if check_docker_compose; then
-                    print_info "Docker Compose 已安装"
-                    read -p "按 Enter 继续..."
-                else
-                    install_docker_compose_standalone
-                fi
-                ;;
-            3)
                 configure_env
                 ;;
-            4)
+            3)
                 build_docker_image
                 ;;
-            5)
+            4)
                 start_service
                 ;;
-            6)
+            5)
                 stop_service
                 ;;
-            7)
+            6)
                 restart_service
                 ;;
-            8)
+            7)
                 view_logs
                 ;;
-            9)
+            8)
                 show_status
                 ;;
             c|C)
