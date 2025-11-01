@@ -700,10 +700,11 @@ class BinanceClient:
             
             headers = {"X-MBX-APIKEY": self.api_key}
             
-            # 尝试多个端点来诊断问题
+            # 根据官方文档，正确的期货账户端点是 /fapi/v2/account 或 /fapi/v1/account
+            # 参考：https://github.com/binance/binance-futures-connector-python
             endpoints_to_try = [
-                ("期货账户", f"{self.base_url}/fapi/v1/account"),
-                ("现货账户", f"{self.base_url}/api/v3/account"),
+                ("期货账户 v2（推荐）", f"{self.base_url}/fapi/v2/account"),
+                ("期货账户 v1", f"{self.base_url}/fapi/v1/account"),
             ]
             
             success = False
@@ -714,6 +715,7 @@ class BinanceClient:
                         if resp.status == 200:
                             logger.info(f"✅ {endpoint_name}验证成功！")
                             success = True
+                            break
                         elif resp.status == 401:
                             logger.warning(f"⚠️ {endpoint_name}认证失败（401）")
                         elif resp.status == 403:
@@ -725,7 +727,7 @@ class BinanceClient:
                             if "Signature" in text:
                                 logger.warning(f"⚠️ {endpoint_name}签名错误")
                             else:
-                                logger.debug(f"⚠️ {endpoint_name}参数错误: {text[:100]}")
+                                logger.debug(f"⚠️ {endpoint_name}参数错误")
                         else:
                             logger.debug(f"⚠️ {endpoint_name}返回 {resp.status}")
                 except Exception as e:
@@ -734,10 +736,15 @@ class BinanceClient:
             if not success:
                 logger.error(f"❌ API密钥验证失败")
                 logger.error(f"   可能原因：")
-                logger.error(f"   1. API密钥或密钥不匹配")
-                logger.error(f"   2. 账户未启用期货交易权限")
-                logger.error(f"   3. IP地址被限制")
-                logger.error(f"   建议：在币安官网检查API密钥设置")
+                logger.error(f"   1. API密钥有多余空格或换行符")
+                logger.error(f"   2. API密钥和密钥不匹配")
+                logger.error(f"   3. 账户未启用期货交易")
+                logger.error(f"   4. IP地址被限制")
+                logger.error(f"\n💡 建议排查步骤：")
+                logger.error(f"   • 在币安官网复制新的API密钥和密钥")
+                logger.error(f"   • 确保没有多余的空格或换行")
+                logger.error(f"   • 检查.env文件中的BINANCE_API_KEY和BINANCE_API_SECRET")
+                logger.error(f"   • 确认API密钥启用了期货交易权限")
                 
         except Exception as e:
             logger.debug(f"验证API时出错: {e}")
