@@ -23,7 +23,8 @@ class TradingStats:
             data_dir: 数据目录路径
         """
         self.data_dir = Path(data_dir)
-        self.analysis_dir = self.data_dir / "analysis"
+        # 分析结果存储在 data/YYYYMMDD/ 目录下
+        self.analysis_dir = self.data_dir
         self.trades_file = self.data_dir / "trades.json"
         
     def get_recent_analysis(self, limit: int = 50) -> List[Dict[str, Any]]:
@@ -41,19 +42,46 @@ class TradingStats:
         if not self.analysis_dir.exists():
             return results
             
-        # 获取所有分析文件
-        for date_dir in sorted(self.analysis_dir.iterdir(), reverse=True):
-            if not date_dir.is_dir():
-                continue
-                
-            for file in sorted(date_dir.glob("*.json"), reverse=True):
+        # 获取所有日期目录（格式: YYYY-MM-DD）
+        date_dirs = []
+        for item in self.analysis_dir.iterdir():
+            if item.is_dir() and item.name not in ['context']:
+                # 检查是否是日期格式的目录
+                if len(item.name) == 10 and item.name.count('-') == 2:
+                    date_dirs.append(item)
+        
+        # 按日期倒序排序
+        date_dirs.sort(reverse=True)
+        
+        # 遍历日期目录，获取分析文件
+        for date_dir in date_dirs:
+            # 获取该日期目录下的所有JSON文件（排除非分析文件）
+            json_files = [f for f in date_dir.glob("analysis_*.json")]
+            json_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            
+            for file in json_files:
                 try:
                     with open(file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
-                        results.append(data)
+                        
+                        # 处理不同的数据格式
+                        if isinstance(data, dict):
+                            # 如果有 results 字段（扫描结果格式）
+                            if 'results' in data and isinstance(data['results'], list):
+                                for item in data['results']:
+                                    # 添加扫描时间戳（如果有）
+                                    if 'analyzed_at' not in item and 'scan_time' in data:
+                                        item['timestamp'] = data['scan_time']
+                                    results.append(item)
+                            else:
+                                # 单个分析结果
+                                results.append(data)
+                        elif isinstance(data, list):
+                            # 如果是列表，展开
+                            results.extend(data)
                         
                     if len(results) >= limit:
-                        return results
+                        return results[:limit]
                 except Exception as e:
                     logger.warning(f"读取分析文件失败 {file}: {e}")
                     
