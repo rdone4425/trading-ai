@@ -395,10 +395,10 @@ class MarketAnalyzer:
                 f"🔍 复盘交易: {trade_data.get('symbol')} "
                 f"{trade_data.get('direction')} "
                 f"({trade_data.get('profit_loss_percentage', 'N/A')}%)"
-        )
-        
-        response = await self.provider.chat(
-            messages=messages,
+            )
+            
+            response = await self.provider.chat(
+                messages=messages,
                 temperature=kwargs.get("temperature", 0.5),
                 max_tokens=kwargs.get("max_tokens", 3000)
             )
@@ -1084,9 +1084,9 @@ class MarketAnalyzer:
                         json_str = response[start:end].strip()
                 else:
                     # 直接提取 JSON 部分
-                start = response.find('{')
-                end = response.rfind('}') + 1
-                json_str = response[start:end]
+                    start = response.find('{')
+                    end = response.rfind('}') + 1
+                    json_str = response[start:end]
                 
                 data = json.loads(json_str)
                 
