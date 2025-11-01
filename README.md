@@ -195,8 +195,10 @@ AUTO_SCAN=true python main.py
 
 ```
 trading-ai/
-├── docs/                      # 📚 完整文档
+├── docs/                      # 📚 完整文档（统一管理）
 │   ├── README.md             # 文档索引
+│   ├── TRADING.md            # 💰 交易功能指南
+│   ├── DOCKER.md             # 🐳 Docker部署指南
 │   ├── INSTALL.md            # 安装指南
 │   └── AUTO_SCAN.md          # 自动扫描说明
 ├── examples/                  # 🎯 示例代码
