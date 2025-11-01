@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  trading-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trading-ai
+    restart: unless-stopped
+    volumes:
+      # 挂载环境变量文件（需要手动创建 .env）
+      - ./.env:/app/.env:ro
+      # 挂载数据目录（持久化分析结果）
+      - ./data:/app/data
+      # 挂载日志目录
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    # 如果不需要交互式终端，可以取消注释下面的行
+    # stdin_open: false
+    # tty: false
+    # 如果需要网络访问，取消注释
+    # ports:
+    #   - "8000:8000"
+
