@@ -682,53 +682,29 @@ class BinanceClient:
 
     async def _validate_api_key(self):
         """验证API密钥的有效性"""
-        logger.info("🔍 开始验证API密钥...")
-        
         # 第一步：检查密钥本身
         if not self.api_key or not self.api_secret:
             logger.error("❌ API密钥或密钥为空")
             return False
         
-        # 第二步：检查隐形字符
-        if self.api_key != self.api_key.strip():
-            logger.warning(f"⚠️  API密钥前后有空格！")
-            logger.warning(f"   原长度: {len(self.api_key)}, 去除空格后: {len(self.api_key.strip())}")
-        
-        if self.api_secret != self.api_secret.strip():
-            logger.warning(f"⚠️  API密钥前后有空格！")
-            logger.warning(f"   原长度: {len(self.api_secret)}, 去除空格后: {len(self.api_secret.strip())}")
+        # 第二步：检查隐形字符（只在发现时记录）
+        if self.api_key != self.api_key.strip() or self.api_secret != self.api_secret.strip():
+            logger.warning(f"⚠️  检测到API密钥前后有空格，建议检查")
         
         # 第三步：检查不可见字符
         def has_invisible_chars(s):
             for i, char in enumerate(s):
-                if ord(char) < 32 or (127 <= ord(char) < 160):  # 控制字符和特殊字符
+                if ord(char) < 32 or (127 <= ord(char) < 160):
                     return True, i, ord(char)
             return False, -1, -1
         
         has_inv_key, pos_key, ord_key = has_invisible_chars(self.api_key)
         has_inv_secret, pos_secret, ord_secret = has_invisible_chars(self.api_secret)
         
-        if has_inv_key:
-            logger.error(f"❌ API密钥在位置 {pos_key} 包含不可见字符 (ASCII: {ord_key})")
+        if has_inv_key or has_inv_secret:
+            logger.warning(f"⚠️  API密钥中检测到不可见字符，可能导致认证失败")
         
-        if has_inv_secret:
-            logger.error(f"❌ API密钥在位置 {pos_secret} 包含不可见字符 (ASCII: {ord_secret})")
-        
-        # 第四步：检查长度
-        logger.info(f"   API密钥长度: {len(self.api_key)} 字符")
-        logger.info(f"   API密钥长度: {len(self.api_secret)} 字符")
-        
-        # 正常长度通常是 64 字符
-        if len(self.api_key) != 64 or len(self.api_secret) != 64:
-            logger.warning(f"⚠️  密钥长度不标准！通常应该是 64 字符")
-        
-        # 第五步：显示密钥的前后几个字符（用于调试）
-        if len(self.api_key) >= 8:
-            logger.debug(f"   API密钥: {self.api_key[:4]}...{self.api_key[-4:]}")
-        if len(self.api_secret) >= 8:
-            logger.debug(f"   API密钥: {self.api_secret[:4]}...{self.api_secret[-4:]}")
-        
-        # 第六步：尝试验证
+        # 尝试验证（只有失败才会输出详细日志）
         await self._validate_api_with_account_info()
     
     async def _validate_api_with_account_info(self):
@@ -756,54 +732,25 @@ class BinanceClient:
             ).hexdigest()
             
             params["signature"] = signature
-            
             headers = {"X-MBX-APIKEY": self.api_key}
             
-            # 根据官方文档，正确的期货账户端点是 /fapi/v2/account 或 /fapi/v1/account
-            # 参考：https://github.com/binance/binance-futures-connector-python
+            # 尝试验证
             endpoints_to_try = [
-                ("期货账户 v2（推荐）", f"{self.base_url}/fapi/v2/account"),
-                ("期货账户 v1", f"{self.base_url}/fapi/v1/account"),
+                f"{self.base_url}/fapi/v2/account",
+                f"{self.base_url}/fapi/v1/account",
             ]
             
-            success = False
-            for endpoint_name, url in endpoints_to_try:
-                logger.debug(f"🔍 尝试 {endpoint_name}: {url}")
+            for url in endpoints_to_try:
                 try:
                     async with self.session.get(url, params=params, headers=headers, proxy=self.proxy, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                         if resp.status == 200:
-                            logger.info(f"✅ {endpoint_name}验证成功！")
-                            success = True
-                            break
-                        elif resp.status == 401:
-                            logger.warning(f"⚠️ {endpoint_name}认证失败（401）")
-                        elif resp.status == 403:
-                            logger.warning(f"⚠️ {endpoint_name}无权限（403）- 账户可能未启用此功能")
-                        elif resp.status == 404:
-                            logger.debug(f"⚠️ {endpoint_name}不存在（404）")
-                        elif resp.status == 400:
-                            text = await resp.text()
-                            if "Signature" in text:
-                                logger.warning(f"⚠️ {endpoint_name}签名错误")
-                            else:
-                                logger.debug(f"⚠️ {endpoint_name}参数错误")
-                        else:
-                            logger.debug(f"⚠️ {endpoint_name}返回 {resp.status}")
-                except Exception as e:
-                    logger.debug(f"⚠️ 尝试{endpoint_name}时出错: {e}")
+                            logger.debug(f"✅ API密钥验证成功")
+                            return True
+                except Exception:
+                    pass
             
-            if not success:
-                logger.error(f"❌ API密钥验证失败")
-                logger.error(f"   可能原因：")
-                logger.error(f"   1. API密钥有多余空格或换行符")
-                logger.error(f"   2. API密钥和密钥不匹配")
-                logger.error(f"   3. 账户未启用期货交易")
-                logger.error(f"   4. IP地址被限制")
-                logger.error(f"\n💡 建议排查步骤：")
-                logger.error(f"   • 在币安官网复制新的API密钥和密钥")
-                logger.error(f"   • 确保没有多余的空格或换行")
-                logger.error(f"   • 检查.env文件中的BINANCE_API_KEY和BINANCE_API_SECRET")
-                logger.error(f"   • 确认API密钥启用了期货交易权限")
+            # 如果都失败了，记录详细错误
+            logger.debug(f"⚠️  API密钥验证失败，将在实际请求时显示详细错误")
                 
         except Exception as e:
             logger.debug(f"验证API时出错: {e}")
