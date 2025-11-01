@@ -18,7 +18,7 @@ services:
     # 如果不需要交互式终端，可以取消注释下面的行
     # stdin_open: false
     # tty: false
-    # 如果需要网络访问，取消注释
+    # Web监控页面端口映射
     ports:
-      - "8000:8000"
+      - "${WEB_PORT:-8080}:8080"
 
