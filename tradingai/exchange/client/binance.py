@@ -9,6 +9,9 @@ import time
 from typing import List, Dict, Optional
 from datetime import datetime
 from ...proxy import ProxyFactory
+from ...logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class BinanceClient:
@@ -27,22 +30,47 @@ class BinanceClient:
             if testnet else "https://fapi.binance.com"
         )
         self.session: Optional[aiohttp.ClientSession] = None
+        
+        # 时间偏移（用于校准本地时间与币安服务器时间）
+        self.time_offset = 0  # 毫秒
     
     async def __aenter__(self):
         self.session = aiohttp.ClientSession()
+        # 初始化时获取服务器时间以校准时间偏移
+        try:
+            await self._sync_server_time()
+        except Exception as e:
+            logger.warning(f"⚠️ 无法同步服务器时间: {e}，将使用本地时间")
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.session:
             await self.session.close()
     
+    async def _sync_server_time(self):
+        """与币安服务器同步时间，解决时间戳不匹配问题"""
+        try:
+            url = f"{self.base_url}/fapi/v1/time"
+            async with self.session.get(url, proxy=self.proxy, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    server_time = data.get("serverTime", 0)
+                    local_time = int(time.time() * 1000)
+                    self.time_offset = server_time - local_time
+                    logger.debug(f"✅ 服务器时间同步完成: 偏移 {self.time_offset}ms")
+                else:
+                    logger.warning(f"⚠️ 无法获取服务器时间: HTTP {resp.status}")
+        except Exception as e:
+            logger.error(f"❌ 时间同步失败: {e}")
+    
     def _sign(self, query_string: str) -> str:
         """生成签名"""
-        return hmac.new(
-            self.api_secret.encode(),
-            query_string.encode(),
+        signature = hmac.new(
+            self.api_secret.encode('utf-8'),
+            query_string.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
+        return signature
     
     async def _request(self, method: str, endpoint: str, params: Dict = None, signed: bool = False) -> Dict:
         """发送请求"""
@@ -54,16 +82,42 @@ class BinanceClient:
         url = f"{self.base_url}{endpoint}"
         
         if signed:
-            params["timestamp"] = int(time.time() * 1000)
+            # 使用校准后的时间戳
+            params["timestamp"] = int(time.time() * 1000) + self.time_offset
+            
+            # 排序参数并生成查询字符串（不包括signature）
             query_string = "&".join([f"{k}={v}" for k, v in sorted(params.items())])
-            params["signature"] = self._sign(query_string)
+            signature = self._sign(query_string)
+            params["signature"] = signature
+            
+            # 记录请求细节用于诊断（不包括密钥）
+            logger.debug(f"📤 签名请求: {method} {endpoint}")
+            logger.debug(f"   时间戳: {params['timestamp']} (偏移: {self.time_offset}ms)")
+            logger.debug(f"   参数数量: {len(params)}")
         
         try:
-            async with self.session.request(method, url, params=params, headers=headers, proxy=self.proxy) as resp:
+            async with self.session.request(method, url, params=params, headers=headers, proxy=self.proxy, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                response_text = await resp.text()
+                
                 if resp.status != 200:
-                    error = await resp.text()
-                    raise Exception(f"API Error {resp.status}: {error}")
-                return await resp.json()
+                    error_msg = f"API Error {resp.status}: {response_text}"
+                    logger.error(f"❌ {error_msg}")
+                    
+                    # 如果是签名错误，尝试重新同步时间
+                    if resp.status == 400 and "Signature" in response_text:
+                        logger.warning(f"⚠️ 检测到签名错误，正在重新同步服务器时间...")
+                        await self._sync_server_time()
+                    
+                    raise Exception(error_msg)
+                
+                try:
+                    return await resp.json()
+                except Exception as e:
+                    logger.error(f"❌ 响应JSON解析失败: {e}")
+                    logger.debug(f"   原始响应: {response_text}")
+                    raise
+        except asyncio.TimeoutError:
+            raise Exception("请求超时（可能是网络问题）")
         except aiohttp.ClientError as e:
             raise Exception(f"网络错误: {e}")
     
@@ -175,8 +229,6 @@ class BinanceClient:
                     await asyncio.sleep(0.1)
                     
             except Exception as e:
-                from ...logger import get_logger
-                logger = get_logger("exchange.client.binance")
                 logger.error(f"获取K线数据失败 {symbol}: {e}")
                 break
         
