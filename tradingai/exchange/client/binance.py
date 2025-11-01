@@ -699,33 +699,46 @@ class BinanceClient:
             params["signature"] = signature
             
             headers = {"X-MBX-APIKEY": self.api_key}
-            # 使用期货账户信息端点（支持两个网络）
-            url = f"{self.base_url}/fapi/v1/account"
             
-            logger.debug(f"🔍 验证API密钥...")
-            logger.debug(f"   URL: {url}")
-            logger.debug(f"   网络: {'Testnet' if self.testnet else 'Mainnet'}")
+            # 尝试多个端点来诊断问题
+            endpoints_to_try = [
+                ("期货账户", f"{self.base_url}/fapi/v1/account"),
+                ("现货账户", f"{self.base_url}/api/v3/account"),
+            ]
             
-            async with self.session.get(url, params=params, headers=headers, proxy=self.proxy, timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                if resp.status == 200:
-                    logger.info(f"✅ API密钥验证成功！")
-                elif resp.status == 401:
-                    logger.error(f"❌ API认证失败（401）- API密钥或密钥无效")
-                    logger.error(f"   检查: BINANCE_API_KEY 和 BINANCE_API_SECRET 是否正确")
-                elif resp.status == 400:
-                    text = await resp.text()
-                    if "Signature" in text:
-                        logger.error(f"❌ 签名验证失败 - 检查密钥是否匹配")
-                    logger.error(f"   响应: {text[:200]}")
-                elif resp.status == 404:
-                    logger.error(f"❌ 端点不存在（404）")
-                    logger.error(f"   可能原因：")
-                    logger.error(f"   1. 网络设置错误（用了testnet密钥但在mainnet，反之亦然）")
-                    logger.error(f"   2. 代理或网络连接问题")
-                    logger.error(f"   URL: {url}")
-                else:
-                    text = await resp.text()
-                    logger.warning(f"⚠️ API验证返回 {resp.status}: {text[:200]}")
+            success = False
+            for endpoint_name, url in endpoints_to_try:
+                logger.debug(f"🔍 尝试 {endpoint_name}: {url}")
+                try:
+                    async with self.session.get(url, params=params, headers=headers, proxy=self.proxy, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                        if resp.status == 200:
+                            logger.info(f"✅ {endpoint_name}验证成功！")
+                            success = True
+                        elif resp.status == 401:
+                            logger.warning(f"⚠️ {endpoint_name}认证失败（401）")
+                        elif resp.status == 403:
+                            logger.warning(f"⚠️ {endpoint_name}无权限（403）- 账户可能未启用此功能")
+                        elif resp.status == 404:
+                            logger.debug(f"⚠️ {endpoint_name}不存在（404）")
+                        elif resp.status == 400:
+                            text = await resp.text()
+                            if "Signature" in text:
+                                logger.warning(f"⚠️ {endpoint_name}签名错误")
+                            else:
+                                logger.debug(f"⚠️ {endpoint_name}参数错误: {text[:100]}")
+                        else:
+                            logger.debug(f"⚠️ {endpoint_name}返回 {resp.status}")
+                except Exception as e:
+                    logger.debug(f"⚠️ 尝试{endpoint_name}时出错: {e}")
+            
+            if not success:
+                logger.error(f"❌ API密钥验证失败")
+                logger.error(f"   可能原因：")
+                logger.error(f"   1. API密钥或密钥不匹配")
+                logger.error(f"   2. 账户未启用期货交易权限")
+                logger.error(f"   3. IP地址被限制")
+                logger.error(f"   建议：在币安官网检查API密钥设置")
+                
         except Exception as e:
             logger.debug(f"验证API时出错: {e}")
 
