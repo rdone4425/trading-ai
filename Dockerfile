@@ -39,8 +39,8 @@ RUN mkdir -p /app/data /app/logs
 # 设置执行权限
 RUN chmod +x main.py
 
-# 暴露端口（如果需要 Web 服务）
-# EXPOSE 8000
+# 暴露Web监控页面端口
+EXPOSE 8080
 
 # 默认命令
 CMD ["python", "main.py"]
