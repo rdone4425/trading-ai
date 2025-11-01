@@ -86,6 +86,8 @@ class BinanceClient:
         headers = {"X-MBX-APIKEY": self.api_key}
         url = f"{self.base_url}{endpoint}"
         
+        query_string = ""  # 初始化，以备签名请求使用
+        
         if signed:
             # 使用经过校准的时间戳（关键！）
             current_timestamp = int(time.time() * 1000) + self.time_offset
@@ -137,15 +139,30 @@ class BinanceClient:
                         logger.warning(f"⚠️  参数 {k} 的值为 None!")
         
         try:
-            # 使用params作为查询参数
-            async with self.session.request(
-                method, url, 
-                params=params, 
-                headers=headers, 
-                proxy=self.proxy, 
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                response_text = await resp.text()
+            # 重要修复：对于签名请求，直接在URL中构建查询字符串，确保签名和实际请求完全匹配
+            # （不使用aiohttp的params参数，因为它会自动编码，可能导致签名不匹配）
+            if signed:
+                # 对于签名请求，必须使用之前生成的查询字符串
+                query_with_signature = query_string + f"&signature={params['signature']}"
+                request_url = f"{url}?{query_with_signature}"
+                logger.debug(f"   完整URL: {request_url[:100]}...")
+                async with self.session.request(
+                    method, request_url,
+                    headers=headers, 
+                    proxy=self.proxy, 
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    response_text = await resp.text()
+            else:
+                # 无签名请求可以用params参数
+                async with self.session.request(
+                    method, url, 
+                    params=params, 
+                    headers=headers, 
+                    proxy=self.proxy, 
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    response_text = await resp.text()
                 
                 if resp.status != 200:
                     error_msg = f"API Error {resp.status}: {response_text}"
