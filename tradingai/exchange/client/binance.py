@@ -569,6 +569,20 @@ class BinanceClient:
         Returns:
             订单信息
         """
+        # 定义数量格式化函数，确保精度不会超过限制
+        def format_quantity(qty):
+            """格式化数量，移除多余的小数位"""
+            if qty <= 0:
+                return "0"
+            # 转换为字符串，移除科学计数法
+            qty_str = f"{float(qty):.15f}".rstrip('0').rstrip('.')
+            # 限制最多 8 位小数（币安标准）
+            if '.' in qty_str:
+                parts = qty_str.split('.')
+                if len(parts[1]) > 8:
+                    qty_str = f"{float(qty):.8f}".rstrip('0').rstrip('.')
+            return qty_str
+        
         params = {
             "symbol": symbol,
             "side": side,
@@ -579,22 +593,21 @@ class BinanceClient:
         if close_position:
             params["closePosition"] = "true"
         else:
-            # 重要：将数值转换为字符串，避免浮点数精度问题导致签名失败
-            # 使用 .8g 格式避免科学计数法，同时移除末尾多余零
-            params["quantity"] = f"{float(quantity):.8g}"
+            # 格式化数量，确保精度在允许范围内
+            params["quantity"] = format_quantity(quantity)
         
         if order_type in ["LIMIT", "STOP", "TAKE_PROFIT"]:
             if not price:
                 raise ValueError(f"限价订单必须指定价格")
-            # 重要：将价格转换为字符串
-            params["price"] = f"{float(price):.8g}"
+            # 格式化价格
+            params["price"] = format_quantity(price)
             params["timeInForce"] = "GTC"
         
         if order_type in ["STOP", "TAKE_PROFIT", "STOP_MARKET", "TAKE_PROFIT_MARKET"]:
             if not stop_price:
                 raise ValueError(f"止损止盈订单必须指定触发价格")
-            # 重要：将触发价格转换为字符串
-            params["stopPrice"] = f"{float(stop_price):.8g}"
+            # 格式化触发价格
+            params["stopPrice"] = format_quantity(stop_price)
         
         data = await self._request("POST", "/fapi/v1/order", params, signed=True)
         

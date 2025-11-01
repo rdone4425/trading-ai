@@ -492,7 +492,12 @@ class Trader:
             await self.platform.set_margin_type(symbol, "ISOLATED")
             logger.debug(f"✅ 已设置逐仓模式: {symbol}")
         except Exception as e:
-            logger.warning(f"⚠️  设置逐仓模式失败: {e}")
+            error_str = str(e)
+            # 如果已经是逐仓模式（-4046），不需要警告
+            if "-4046" in error_str or "No need to change" in error_str:
+                logger.debug(f"ℹ️ {symbol} 已经是逐仓模式")
+            else:
+                logger.warning(f"⚠️  设置逐仓模式失败: {e}")
             # 不抛出异常，允许继续交易
     
     async def _get_account_balance(self, use_cache: bool = True, cache_duration: int = 60) -> float:
