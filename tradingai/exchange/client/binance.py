@@ -154,12 +154,18 @@ class BinanceClient:
                     # 签名错误的特殊处理
                     if resp.status == 400 and "Signature" in response_text:
                         logger.warning(f"⚠️ 检测到签名错误")
-                        logger.warning(f"   时间偏移: {self.time_offset}ms")
-                        logger.warning(f"   当前时间戳: {params.get('timestamp', 'N/A')}")
-                        logger.warning(f"   💡 建议: 检查API密钥和密钥是否匹配")
-                        logger.warning(f"   💡 建议: 检查系统时间是否准确")
-                        # 注意：不要在这里重新同步，因为初始化时已经同步过了
-                        # 重新同步会导致每个请求都重新同步，效率很低
+                        logger.warning(f"   ℹ️ 调试信息:")
+                        logger.warning(f"      • 时间偏移: {self.time_offset}ms（已在初始化时同步）")
+                        logger.warning(f"      • 当前时间戳: {params.get('timestamp', 'N/A')} ms")
+                        logger.warning(f"      • API密钥长度: {len(self.api_key)} 字符")
+                        logger.warning(f"      • API密钥长度: {len(self.api_secret)} 字符")
+                        logger.warning(f"\n   💡 可能的原因:")
+                        logger.warning(f"      1. API密钥或密钥复制时有多余空格/换行")
+                        logger.warning(f"      2. API密钥和密钥不匹配")
+                        logger.warning(f"      3. 密钥已过期或被重置")
+                        logger.warning(f"\n   ✅ 解决方案:")
+                        logger.warning(f"      在币安官网重新生成API密钥和密钥")
+                        logger.warning(f"      确保复制时没有多余的空格或换行")
                     
                     raise Exception(error_msg)
                 
@@ -482,7 +488,7 @@ class BinanceClient:
         """
         params = {
             "symbol": symbol,
-            "leverage": leverage
+            "leverage": str(int(leverage))
         }
         
         data = await self._request("POST", "/fapi/v1/leverage", params, signed=True)
@@ -544,18 +550,22 @@ class BinanceClient:
         if close_position:
             params["closePosition"] = "true"
         else:
-            params["quantity"] = quantity
+            # 重要：将数值转换为字符串，避免浮点数精度问题导致签名失败
+            # 使用 .8g 格式避免科学计数法，同时移除末尾多余零
+            params["quantity"] = f"{float(quantity):.8g}"
         
         if order_type in ["LIMIT", "STOP", "TAKE_PROFIT"]:
             if not price:
                 raise ValueError(f"限价订单必须指定价格")
-            params["price"] = price
+            # 重要：将价格转换为字符串
+            params["price"] = f"{float(price):.8g}"
             params["timeInForce"] = "GTC"
         
         if order_type in ["STOP", "TAKE_PROFIT", "STOP_MARKET", "TAKE_PROFIT_MARKET"]:
             if not stop_price:
                 raise ValueError(f"止损止盈订单必须指定触发价格")
-            params["stopPrice"] = stop_price
+            # 重要：将触发价格转换为字符串
+            params["stopPrice"] = f"{float(stop_price):.8g}"
         
         data = await self._request("POST", "/fapi/v1/order", params, signed=True)
         
