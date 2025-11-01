@@ -645,7 +645,10 @@ async def main():
         if config.WEB_ENABLED:
             try:
                 from tradingai.web import WebServer
-                web_server = WebServer(host="0.0.0.0", port=config.WEB_PORT)
+                import os
+                # 确保使用正确的data目录路径
+                data_dir = os.path.join(os.path.dirname(__file__), "data")
+                web_server = WebServer(host="0.0.0.0", port=config.WEB_PORT, data_dir=data_dir)
                 await web_server.run_async()
                 logger.info("")
             except Exception as e:
