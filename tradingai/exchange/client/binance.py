@@ -38,11 +38,11 @@ class BinanceClient:
         self.session = aiohttp.ClientSession()
         # 初始化时验证API密钥
         await self._validate_api_key()
-        # 初始化时获取服务器时间以校准时间偏移
-        try:
-            await self._sync_server_time()
-        except Exception as e:
-            logger.warning(f"⚠️ 无法同步服务器时间: {e}，将使用本地时间")
+        # 初始化时获取服务器时间以校准时间偏移（必须在验证前或后都要做）
+        await self._sync_server_time()
+        logger.info(f"✅ 币安客户端初始化完成")
+        logger.info(f"   网络: {'🧪 Testnet' if self.testnet else '🚀 Mainnet'}")
+        logger.info(f"   时间偏移: {self.time_offset}ms")
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -60,10 +60,13 @@ class BinanceClient:
                     local_time = int(time.time() * 1000)
                     self.time_offset = server_time - local_time
                     logger.debug(f"✅ 服务器时间同步完成: 偏移 {self.time_offset}ms")
+                    return True
                 else:
                     logger.warning(f"⚠️ 无法获取服务器时间: HTTP {resp.status}")
+                    return False
         except Exception as e:
             logger.error(f"❌ 时间同步失败: {e}")
+            return False
     
     def _sign(self, query_string: str) -> str:
         """生成签名"""
@@ -150,13 +153,13 @@ class BinanceClient:
                     
                     # 签名错误的特殊处理
                     if resp.status == 400 and "Signature" in response_text:
-                        logger.warning(f"⚠️ 检测到签名错误: {response_text}")
-                        logger.warning(f"⚠️ 正在重新同步服务器时间...")
-                        try:
-                            await self._sync_server_time()
-                            logger.info(f"✅ 服务器时间已重新同步，偏移: {self.time_offset}ms")
-                        except Exception as sync_error:
-                            logger.error(f"❌ 重新同步失败: {sync_error}")
+                        logger.warning(f"⚠️ 检测到签名错误")
+                        logger.warning(f"   时间偏移: {self.time_offset}ms")
+                        logger.warning(f"   当前时间戳: {params.get('timestamp', 'N/A')}")
+                        logger.warning(f"   💡 建议: 检查API密钥和密钥是否匹配")
+                        logger.warning(f"   💡 建议: 检查系统时间是否准确")
+                        # 注意：不要在这里重新同步，因为初始化时已经同步过了
+                        # 重新同步会导致每个请求都重新同步，效率很低
                     
                     raise Exception(error_msg)
                 
