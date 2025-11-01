@@ -121,6 +121,40 @@ class WebServer:
                     'error': str(e)
                 }), 500
         
+        @self.app.route('/api/performance')
+        def get_performance():
+            """获取表现历史"""
+            try:
+                days = request.args.get('days', 30, type=int)
+                history = self.stats.get_performance_history(days=days)
+                return jsonify({
+                    'success': True,
+                    'data': history
+                })
+            except Exception as e:
+                logger.error(f"获取表现历史失败: {e}", exc_info=True)
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        
+        @self.app.route('/api/symbols')
+        def get_symbols():
+            """获取交易对统计"""
+            try:
+                limit = request.args.get('limit', 10, type=int)
+                symbols = self.stats.get_symbol_performance(limit=limit)
+                return jsonify({
+                    'success': True,
+                    'data': symbols
+                })
+            except Exception as e:
+                logger.error(f"获取交易对统计失败: {e}", exc_info=True)
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        
         @self.app.route('/health')
         def health():
             """健康检查"""

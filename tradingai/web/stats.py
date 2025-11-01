@@ -168,6 +168,119 @@ class TradingStats:
             'period_days': days
         }
     
+    def get_performance_history(self, days: int = 30) -> List[Dict[str, Any]]:
+        """
+        获取每日表现历史（用于图表）
+        
+        Args:
+            days: 统计天数
+            
+        Returns:
+            每日统计列表
+        """
+        from datetime import datetime, timedelta
+        
+        trades = self.load_trades()
+        if not trades:
+            return []
+        
+        # 按日期分组
+        daily_stats = {}
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        for trade in trades:
+            try:
+                trade_date = datetime.fromisoformat(trade.get('timestamp', '2000-01-01')).date()
+                if datetime.combine(trade_date, datetime.min.time()) <= cutoff_date:
+                    continue
+                    
+                date_str = trade_date.isoformat()
+                if date_str not in daily_stats:
+                    daily_stats[date_str] = {
+                        'date': date_str,
+                        'profit': 0,
+                        'trades': 0,
+                        'wins': 0,
+                        'losses': 0
+                    }
+                
+                profit = trade.get('profit', 0)
+                daily_stats[date_str]['profit'] += profit
+                daily_stats[date_str]['trades'] += 1
+                
+                if profit > 0:
+                    daily_stats[date_str]['wins'] += 1
+                else:
+                    daily_stats[date_str]['losses'] += 1
+                    
+            except Exception as e:
+                logger.warning(f"处理交易记录失败: {e}")
+                continue
+        
+        # 转换为列表并排序
+        result = sorted(daily_stats.values(), key=lambda x: x['date'])
+        
+        # 计算累计收益
+        cumulative = 0
+        for item in result:
+            cumulative += item['profit']
+            item['cumulative_profit'] = round(cumulative, 2)
+            item['win_rate'] = round(item['wins'] / item['trades'] * 100, 2) if item['trades'] > 0 else 0
+        
+        return result
+    
+    def get_symbol_performance(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        获取各交易对表现统计
+        
+        Args:
+            limit: 返回数量
+            
+        Returns:
+            交易对统计列表
+        """
+        trades = self.load_trades()
+        if not trades:
+            return []
+        
+        # 按交易对分组
+        symbol_stats = {}
+        
+        for trade in trades:
+            symbol = trade.get('symbol', 'UNKNOWN')
+            if symbol not in symbol_stats:
+                symbol_stats[symbol] = {
+                    'symbol': symbol,
+                    'total_trades': 0,
+                    'wins': 0,
+                    'losses': 0,
+                    'total_profit': 0,
+                    'avg_profit': 0
+                }
+            
+            profit = trade.get('profit', 0)
+            symbol_stats[symbol]['total_trades'] += 1
+            symbol_stats[symbol]['total_profit'] += profit
+            
+            if profit > 0:
+                symbol_stats[symbol]['wins'] += 1
+            else:
+                symbol_stats[symbol]['losses'] += 1
+        
+        # 计算平均收益和胜率
+        for stats in symbol_stats.values():
+            if stats['total_trades'] > 0:
+                stats['avg_profit'] = round(stats['total_profit'] / stats['total_trades'], 2)
+                stats['win_rate'] = round(stats['wins'] / stats['total_trades'] * 100, 2)
+            else:
+                stats['avg_profit'] = 0
+                stats['win_rate'] = 0
+        
+        # 按总收益排序
+        result = sorted(symbol_stats.values(), key=lambda x: x['total_profit'], reverse=True)
+        
+        return result[:limit]
+    
     def get_dashboard_data(self) -> Dict[str, Any]:
         """
         获取仪表板数据
@@ -179,6 +292,8 @@ class TradingStats:
             'recent_analysis': self.get_recent_analysis(limit=20),
             'stats_7d': self.calculate_stats(days=7),
             'stats_30d': self.calculate_stats(days=30),
-            'all_trades': self.load_trades()[-50:]  # 最近50条交易
+            'all_trades': self.load_trades()[-50:],  # 最近50条交易
+            'performance_history': self.get_performance_history(days=30),
+            'symbol_performance': self.get_symbol_performance(limit=10)
         }
 
