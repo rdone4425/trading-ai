@@ -641,6 +641,17 @@ async def main():
         logger.info("="*60)
         logger.info("")
         
+        # 启动Web监控服务器（后台运行）
+        if config.WEB_ENABLED:
+            try:
+                from tradingai.web import WebServer
+                web_server = WebServer(host="0.0.0.0", port=config.WEB_PORT)
+                await web_server.run_async()
+                logger.info("")
+            except Exception as e:
+                logger.warning(f"⚠️  Web服务器启动失败（不影响主程序）: {e}")
+                logger.info("")
+        
         # 显示配置
         logger.info("⚙️  配置:")
         logger.info(f"   交易所: {config.EXCHANGE_NAME}")

@@ -14,6 +14,7 @@
 - 🔄 **[自动扫描](AUTO_SCAN.md)** - 自动循环扫描和K线对齐
 - 🚀 **[并发分析](CONCURRENT.md)** - 提升分析速度的并发配置
 - 📊 **[数据流程](DATA_FLOW.md)** - 数据处理流程和结构说明
+- 🌐 **[Web监控](WEB_MONITOR.md)** - 实时监控页面（胜率、盈亏比、交易统计）
 - 🎯 **[提示词管理](PROMPTS.md)** - AI提示词配置和管理
 
 ### 高级配置
@@ -35,6 +36,7 @@ trading-ai/
 │   ├── README.md          # 文档索引（本文件）
 │   ├── TRADING.md         # 💰 交易功能完整指南
 │   ├── DOCKER.md          # 🐳 Docker部署指南
+│   ├── WEB_MONITOR.md     # 🌐 Web监控页面
 │   ├── INSTALL.md         # 安装指南
 │   ├── AUTO_SCAN.md       # 自动扫描功能
 │   ├── CONCURRENT.md      # 并发分析配置

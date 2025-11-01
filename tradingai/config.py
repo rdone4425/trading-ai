@@ -27,6 +27,15 @@ DEFAULT_LEVERAGE = int(os.getenv("DEFAULT_LEVERAGE", "10"))
 MAX_LOSS_PER_TRADE = float(os.getenv("MAX_LOSS_PER_TRADE", "0.02"))
 MAX_POSITION_SIZE = float(os.getenv("MAX_POSITION_SIZE", "0.3"))
 
+# ==================== Web监控配置 ====================
+def get_bool_env(key, default=False):
+    """获取布尔型环境变量"""
+    value = os.getenv(key, str(default)).lower()
+    return value in ('true', '1', 'yes', 'on')
+
+WEB_ENABLED = get_bool_env('WEB_ENABLED', True)
+WEB_PORT = int(os.getenv('WEB_PORT', '8080'))
+
 # ==================== 扫描配置 ====================
 # 基础配置
 LOOKBACK = int(os.getenv("LOOKBACK", "100"))
