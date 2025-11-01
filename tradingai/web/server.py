@@ -127,17 +127,34 @@ class WebServer:
                     try:
                         import asyncio
                         import concurrent.futures
+                        from tradingai.exchange.factory import PlatformFactory
+                        from tradingai import config
                         
                         # 使用线程池执行器来运行异步代码（避免事件循环冲突）
                         def get_balance_in_thread():
-                            """在线程中运行异步函数"""
+                            """在线程中创建新的平台连接并获取余额"""
                             try:
                                 # 在线程中创建新的事件循环
                                 new_loop = asyncio.new_event_loop()
                                 asyncio.set_event_loop(new_loop)
+                                
+                                # 创建一个新的临时平台连接（避免使用已存在的客户端连接）
                                 try:
-                                    balance = new_loop.run_until_complete(self.platform.get_balance())
-                                    return balance
+                                    temp_platform = PlatformFactory.create(
+                                        exchange_name=config.EXCHANGE_NAME,
+                                        api_key=config.BINANCE_API_KEY,
+                                        api_secret=config.BINANCE_API_SECRET,
+                                        testnet=config.TESTNET
+                                    )
+                                    # 在新循环中连接
+                                    new_loop.run_until_complete(temp_platform.connect())
+                                    try:
+                                        # 获取余额
+                                        balance = new_loop.run_until_complete(temp_platform.get_balance())
+                                        return balance
+                                    finally:
+                                        # 断开连接
+                                        new_loop.run_until_complete(temp_platform.disconnect())
                                 finally:
                                     new_loop.close()
                             except Exception as e:
@@ -147,7 +164,7 @@ class WebServer:
                         # 使用线程池执行器（避免阻塞Flask）
                         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                             future = executor.submit(get_balance_in_thread)
-                            balance = future.result(timeout=5)  # 5秒超时
+                            balance = future.result(timeout=10)  # 10秒超时（包括连接时间）
                         
                         if balance and balance > 0:
                             account_balance = balance
@@ -157,7 +174,7 @@ class WebServer:
                             balance_error = "余额为0或无效"
                             logger.warning(f"⚠️  从交易所获取的余额无效: {balance}")
                     except concurrent.futures.TimeoutError:
-                        balance_error = "获取余额超时（超过5秒）"
+                        balance_error = "获取余额超时（超过10秒）"
                         logger.warning(f"⚠️  从交易所获取余额超时，将使用配置值")
                     except Exception as e:
                         balance_error = str(e)
