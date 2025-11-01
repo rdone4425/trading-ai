@@ -126,10 +126,29 @@ class WebServer:
                 if self.platform:
                     try:
                         import asyncio
-                        # 尝试从交易所获取真实余额
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        balance = loop.run_until_complete(self.platform.get_balance())
+                        import concurrent.futures
+                        
+                        # 使用线程池执行器来运行异步代码（避免事件循环冲突）
+                        def get_balance_in_thread():
+                            """在线程中运行异步函数"""
+                            try:
+                                # 在线程中创建新的事件循环
+                                new_loop = asyncio.new_event_loop()
+                                asyncio.set_event_loop(new_loop)
+                                try:
+                                    balance = new_loop.run_until_complete(self.platform.get_balance())
+                                    return balance
+                                finally:
+                                    new_loop.close()
+                            except Exception as e:
+                                logger.error(f"线程中获取余额失败: {e}")
+                                return None
+                        
+                        # 使用线程池执行器（避免阻塞Flask）
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                            future = executor.submit(get_balance_in_thread)
+                            balance = future.result(timeout=5)  # 5秒超时
+                        
                         if balance and balance > 0:
                             account_balance = balance
                             balance_source = 'exchange'  # 来自交易所
@@ -137,7 +156,9 @@ class WebServer:
                         else:
                             balance_error = "余额为0或无效"
                             logger.warning(f"⚠️  从交易所获取的余额无效: {balance}")
-                        loop.close()
+                    except concurrent.futures.TimeoutError:
+                        balance_error = "获取余额超时（超过5秒）"
+                        logger.warning(f"⚠️  从交易所获取余额超时，将使用配置值")
                     except Exception as e:
                         balance_error = str(e)
                         logger.warning(f"⚠️  从交易所获取余额失败: {e}，将使用配置值")

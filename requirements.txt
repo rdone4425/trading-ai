@@ -6,6 +6,6 @@ TA-Lib>=0.4.28
 openai>=1.0.0
 aiofiles>=23.0.0
 flask>=2.3.0
-flask-cors>=4.0.0  # 异步文件I/O支持
+flask-cors>=4.0.0
 
 
