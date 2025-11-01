@@ -1276,20 +1276,49 @@ class MarketAnalyzer:
                 atr = entry_price * 0.02  # 假设 ATR 为价格的 2%
                 logger.debug(f"未找到 ATR 指标，使用估算值: {atr}")
             
-            # 2. 重新计算止损（基于 ATR）
-            calculated_stop_loss = self.risk_calculator.calculate_stop_loss(
-                entry_price=entry_price,
-                atr=atr,
-                atr_multiplier=config.ATR_MULTIPLIER,
-                position=position
-            )
+            # 2. 重新计算止损（基于 ATR，但进行优化）
+            # 原始ATR距离
+            atr_distance = atr * config.ATR_MULTIPLIER if atr and atr > 0 else 0
             
-            # 3. 重新计算止盈（基于风险回报比）
+            # 获取当前价格附近的支撑/阻力位，优先使用技术位而不是单纯的ATR
+            # 从 support/resistance 中获取（如果有的话）
+            support_level = result.get('support', entry_price * 0.98)
+            resistance_level = result.get('resistance', entry_price * 1.02)
+            
+            if result['action'] == '做多':
+                # 做多：止损应该在支撑位下方，但不要太远
+                # 优先使用支撑位 - 小幅下降（2-3%），而不是简单的ATR
+                suggested_stop_loss = min(support_level * 0.98, entry_price - atr_distance)
+                # 如果ATR计算出的止损太远，自动调整为更紧凑的值
+                max_stop_loss_distance = entry_price * 0.03  # 最多下降3%
+                calculated_stop_loss = max(suggested_stop_loss, entry_price - max_stop_loss_distance)
+            else:
+                # 做空：止损应该在阻力位上方，但不要太远
+                suggested_stop_loss = max(resistance_level * 1.02, entry_price + atr_distance)
+                max_stop_loss_distance = entry_price * 0.03  # 最多上升3%
+                calculated_stop_loss = min(suggested_stop_loss, entry_price + max_stop_loss_distance)
+            
+            # 3. 重新计算止盈（使用更合理的风险回报比）
+            # 实际的止损距离（百分比）
+            actual_stop_distance_percent = abs(entry_price - calculated_stop_loss) / entry_price
+            
+            # 根据止损距离动态调整风险回报比
+            # 如果止损距离小（≤1%），可以用更高的回报比（1:3）
+            # 如果止损距离大（≥3%），用较低的回报比（1:1.5）
+            if actual_stop_distance_percent <= 0.01:
+                dynamic_rr_ratio = 3.0  # 紧凑止损可以追求更高收益
+            elif actual_stop_distance_percent <= 0.02:
+                dynamic_rr_ratio = 2.5
+            elif actual_stop_distance_percent <= 0.03:
+                dynamic_rr_ratio = 2.0
+            else:
+                dynamic_rr_ratio = 1.5  # 宽止损用较低的回报比
+            
             calculated_take_profit = self.risk_calculator.calculate_take_profit(
                 entry_price=entry_price,
                 stop_loss=calculated_stop_loss,
-                risk_reward_ratio=config.RISK_REWARD_RATIO,
-                position=position
+                risk_reward_ratio=dynamic_rr_ratio,
+                position=result['action']
             )
             
             # 4. 获取账户余额（优先从交易所获取，失败则使用配置值）
