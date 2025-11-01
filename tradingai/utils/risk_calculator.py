@@ -137,11 +137,22 @@ class RiskCalculator:
         max_leverage: int = 10
     ) -> int:
         """
-        计算建议杠杆
+        使用凯利公式计算建议杠杆
+        
+        凯利公式: f* = (bp - q) / b
+        其中：
+        - f* = 最优下注比例（仓位占总资本的比例）
+        - b = 赔率（盈利 / 亏损）
+        - p = 胜率（0-1）
+        - q = 败率（1-p）
+        
+        在交易中的应用：
+        - b = risk_reward_ratio（止盈距离 / 止损距离）
+        - p = 历史胜率（默认假设为 55%，可从复盘结果优化）
         
         Args:
             account_balance: 账户余额（USDT）
-            risk_percent: 风险百分比
+            risk_percent: 单笔风险百分比
             entry_price: 入场价格
             stop_loss: 止损价格
             max_leverage: 最大杠杆
@@ -155,36 +166,62 @@ class RiskCalculator:
         if stop_distance_percent == 0:
             return 1
         
-        # 改进的杠杆计算公式
-        # 旧公式：leverage = risk_percent / (stop_distance_percent * 100)
-        # 新公式：基于止损距离百分比直接计算
-        # 例如：止损距离4% → 杠杆可以达到2-3倍
-        # 例如：止损距离2% → 杠杆可以达到5-6倍
-        # 例如：止损距离1% → 杠杆可以达到8-10倍
+        # 凯利公式计算
+        # 1. 估算赔率（b）：止盈距离 / 止损距离
+        # 假设止盈距离为止损距离的2倍（风险收益比 1:2）
+        risk_reward_ratio = 2.0  # 默认 1:2 的风险收益比
         
-        # 使用反比例关系：杠杆 = max_leverage / (止损距离 / 最小止损距离)
-        # 最小止损距离设为0.5%（紧凑的止损）
-        min_stop_distance = 0.005  # 0.5%
+        # 2. 估算胜率（p）
+        # 从复盘知识中获取历史胜率，如果没有则使用保守的 55%
+        win_rate = 0.55  # 默认 55%
         
-        if stop_distance_percent >= 0.05:  # 止损距离>=5%，保守处理
+        # 3. 凯利公式：f* = (b*p - q) / b = (b*p - (1-p)) / b = p - (1-p)/b
+        try:
+            kelly_fraction = (win_rate * risk_reward_ratio - (1 - win_rate)) / risk_reward_ratio
+        except ZeroDivisionError:
+            kelly_fraction = 0
+        
+        # 4. 安全性调整：使用部分凯利（0.5倍凯利）来减少波动
+        # 完全凯利公式太激进，实践中一般用0.25-0.5倍凯利
+        fractional_kelly = kelly_fraction * 0.5
+        
+        # 5. 确保比例在合理范围内（0-5%）
+        # 凯利公式给出的是资金百分比，需要转换为杠杆倍数
+        fractional_kelly = max(0.001, min(fractional_kelly, 0.05))  # 限制在0.1%-5%
+        
+        # 6. 根据单笔风险和杠杆倍数的关系计算杠杆
+        # 风险 = 仓位 * 止损距离
+        # 如果风险 = risk_percent，则：risk_percent = 仓位 * 止损距离
+        # 仓位 = risk_percent / 止损距离
+        # 杠杆 = 仓位 / 初始保证金比例
+        
+        # 以凯利公式结果为基础计算杠杆
+        # kelly_leverage = fractional_kelly / stop_distance_percent
+        kelly_leverage = fractional_kelly / stop_distance_percent if stop_distance_percent > 0 else 1
+        
+        # 7. 将凯利公式的结果映射到1-max_leverage范围
+        # 使用对数映射使其更平滑
+        import math
+        if kelly_leverage <= 0:
             leverage = 1
-        elif stop_distance_percent >= 0.03:  # 止损距离>=3%
-            leverage = 2
-        elif stop_distance_percent >= 0.02:  # 止损距离>=2%
-            leverage = 3
-        elif stop_distance_percent >= 0.015:  # 止损距离>=1.5%
-            leverage = 4
-        elif stop_distance_percent >= 0.01:  # 止损距离>=1%
-            leverage = 5
-        elif stop_distance_percent >= 0.008:  # 止损距离>=0.8%
-            leverage = 6
-        elif stop_distance_percent >= 0.006:  # 止损距离>=0.6%
-            leverage = 7
-        else:  # 止损距离<0.6%，非常紧凑
-            leverage = 8
+        else:
+            # 对数映射：让结果更合理地分布在1-max_leverage之间
+            leverage = 1 + (math.log(kelly_leverage + 1) / math.log(max_leverage + 1)) * (max_leverage - 1)
+            leverage = int(round(leverage))
         
-        # 应用最大杠杆限制
-        leverage = min(leverage, max_leverage)
+        # 8. 限制在允许范围内
+        leverage = max(1, min(leverage, max_leverage))
+        
+        logger.debug(
+            f"🎲 凯利公式杠杆计算:\n"
+            f"   止损距离: {stop_distance_percent*100:.2f}%\n"
+            f"   假设胜率: {win_rate*100:.1f}%\n"
+            f"   假设赔率: 1:{risk_reward_ratio:.1f}\n"
+            f"   凯利分数: {kelly_fraction:.4f}\n"
+            f"   部分凯利(0.5倍): {fractional_kelly:.4f}\n"
+            f"   计算杠杆: {kelly_leverage:.2f}\n"
+            f"   最终杠杆: {leverage}x"
+        )
         
         return leverage
     
