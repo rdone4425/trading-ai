@@ -493,16 +493,35 @@
         .analysis-item {
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 20px;
+            border-radius: 14px;
+            padding: 20px 24px;
             transition: all 0.3s ease;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        
+        .analysis-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            border-radius: 14px 14px 0 0;
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
         
         .analysis-item:hover {
             border-color: var(--primary-color);
-            background: rgba(102, 126, 234, 0.05);
-            transform: translateX(4px);
+            background: rgba(102, 126, 234, 0.06);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .analysis-item:hover::before {
+            opacity: 1;
         }
         
         .analysis-reason {
@@ -600,13 +619,19 @@
         
         .analysis-details {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px 20px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
             font-size: 0.85em;
-            margin-top: 12px;
+            margin-top: 16px;
         }
         
         /* 确保在小屏幕上也能正确显示 */
+        @media (max-width: 1400px) {
+            .analysis-details {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
         @media (max-width: 768px) {
             .analysis-details {
                 grid-template-columns: 1fr;
@@ -616,29 +641,66 @@
         .detail-row {
             display: flex;
             flex-direction: column;
-            gap: 4px;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            justify-content: space-between;
+            gap: 6px;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             transition: all 0.3s ease;
+            min-height: 70px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .detail-row::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: currentColor;
+            opacity: 0.3;
+            transition: opacity 0.3s ease;
         }
         
         .detail-row:hover {
-            background: rgba(102, 126, 234, 0.05);
-            border-color: rgba(102, 126, 234, 0.2);
+            background: rgba(102, 126, 234, 0.08);
+            border-color: rgba(102, 126, 234, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .detail-row:hover::before {
+            opacity: 0.6;
         }
         
         .detail-row .detail-label {
-            font-size: 0.8em;
+            display: flex;
+            align-items: center;
+            font-size: 0.7em;
             color: var(--text-secondary);
-            margin-bottom: 4px;
+            margin-bottom: 0;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.8;
+            white-space: nowrap;
+        }
+        
+        .detail-row .detail-label i {
+            margin-right: 4px;
+            font-size: 0.85em;
         }
         
         .detail-row .detail-value {
-            font-size: 1.1em;
+            font-size: 1.05em;
             font-weight: 700;
             color: var(--text-primary);
+            line-height: 1.3;
+            word-break: break-word;
+            white-space: nowrap;
         }
         
         .detail-label {
@@ -649,6 +711,23 @@
         .detail-value {
             color: var(--text-primary);
             font-weight: 600;
+        }
+        
+        /* 为不同类型的detail-row添加特定样式 */
+        .detail-row[data-type="entry"]::before {
+            background: var(--primary-color);
+        }
+        
+        .detail-row[data-type="stop"]::before {
+            background: var(--danger-color);
+        }
+        
+        .detail-row[data-type="profit"]::before {
+            background: var(--success-color);
+        }
+        
+        .detail-row[data-type="confidence"]::before {
+            background: var(--info-color);
         }
         
         /* ========== 时间戳 ========== */
@@ -1266,51 +1345,59 @@
                         </span>
                     </div>
                     <div class="analysis-details">
-                        <div class="detail-row">
+                        <div class="detail-row" data-type="entry">
                             <div class="detail-label">
-                                <i class="fas fa-sign-in-alt" style="margin-right: 6px; color: var(--primary-color);"></i>
-                                入场价
+                                <i class="fas fa-sign-in-alt" style="color: var(--primary-color);"></i>
+                                <span>入场价</span>
                             </div>
                             <div class="detail-value" style="color: var(--primary-color);">
                                 ${item.entry_price ? formatPrice(item.entry_price) : '-'}
                             </div>
                         </div>
-                        <div class="detail-row">
+                        <div class="detail-row" data-type="stop">
                             <div class="detail-label">
-                                <i class="fas fa-arrow-down" style="margin-right: 6px; color: var(--danger-color);"></i>
-                                止损价
+                                <i class="fas fa-shield-alt" style="color: var(--danger-color);"></i>
+                                <span>止损价</span>
                             </div>
                             <div class="detail-value" style="color: var(--danger-color);">
                                 ${(item.stop_loss !== undefined && item.stop_loss !== null && !isNaN(item.stop_loss) && item.stop_loss > 0) ? formatPrice(item.stop_loss) : '-'}
                             </div>
                         </div>
-                        <div class="detail-row">
+                        <div class="detail-row" data-type="profit">
                             <div class="detail-label">
-                                <i class="fas fa-arrow-up" style="margin-right: 6px; color: var(--success-color);"></i>
-                                止盈价
+                                <i class="fas fa-trophy" style="color: var(--success-color);"></i>
+                                <span>止盈价</span>
                             </div>
                             <div class="detail-value" style="color: var(--success-color);">
                                 ${item.take_profit ? formatPrice(item.take_profit) : '-'}
                             </div>
                         </div>
-                        <div class="detail-row">
+                        <div class="detail-row" data-type="confidence">
                             <div class="detail-label">
-                                <i class="fas fa-chart-line" style="margin-right: 6px;"></i>
-                                信心度
+                                <i class="fas fa-chart-line" style="color: var(--info-color);"></i>
+                                <span>信心度</span>
                             </div>
                             <div class="detail-value">
-                                ${((item.confidence || 0) * 100).toFixed(0)}%
-                                <span style="font-size: 0.75em; margin-left: 6px; padding: 2px 8px; border-radius: 10px; background: ${(item.confidence || 0) >= 0.6 ? 'rgba(16, 185, 129, 0.2)' : (item.confidence || 0) >= 0.4 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; color: ${(item.confidence || 0) >= 0.6 ? 'var(--success-color)' : (item.confidence || 0) >= 0.4 ? 'var(--warning-color)' : 'var(--danger-color)'};">
-                                    ${(item.confidence || 0) >= 0.6 ? '高' : (item.confidence || 0) >= 0.4 ? '中' : '低'}
-                                </span>
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span style="font-size: 1.1em;">${((item.confidence || 0) * 100).toFixed(0)}%</span>
+                                    <span style="font-size: 0.7em; padding: 4px 10px; border-radius: 12px; background: ${(item.confidence || 0) >= 0.6 ? 'rgba(16, 185, 129, 0.25)' : (item.confidence || 0) >= 0.4 ? 'rgba(245, 158, 11, 0.25)' : 'rgba(239, 68, 68, 0.25)'}; color: ${(item.confidence || 0) >= 0.6 ? 'var(--success-color)' : (item.confidence || 0) >= 0.4 ? 'var(--warning-color)' : 'var(--danger-color)'}; font-weight: 600; border: 1px solid ${(item.confidence || 0) >= 0.6 ? 'rgba(16, 185, 129, 0.4)' : (item.confidence || 0) >= 0.4 ? 'rgba(245, 158, 11, 0.4)' : 'rgba(239, 68, 68, 0.4)'};">
+                                        ${(item.confidence || 0) >= 0.6 ? '高' : (item.confidence || 0) >= 0.4 ? '中' : '低'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: space-between; font-size: 0.8em; color: var(--text-secondary);">
-                        <span>
-                            <i class="fas fa-clock" style="margin-right: 6px;"></i>
-                            分析时间: ${item.analyzed_at ? formatDateTime(item.analyzed_at) : (item.timestamp ? formatDateTime(item.timestamp) : '未知')}
-                        </span>
+                    <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 0.8em;">
+                        <div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);">
+                            <i class="fas fa-clock" style="color: var(--primary-color); opacity: 0.7;"></i>
+                            <span>分析时间: <strong style="color: var(--text-primary);">${item.analyzed_at ? formatDateTime(item.analyzed_at) : (item.timestamp ? formatDateTime(item.timestamp) : '未知')}</strong></span>
+                        </div>
+                        ${item.leverage ? `
+                            <div style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(102, 126, 234, 0.15); border-radius: 12px; color: var(--primary-color); font-weight: 600;">
+                                <i class="fas fa-balance-scale"></i>
+                                <span>${item.leverage}x 杠杆</span>
+                            </div>
+                        ` : ''}
                     </div>
                     ${item.reason ? `
                         <div class="analysis-reason">

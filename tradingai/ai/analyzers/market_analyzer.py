@@ -1128,20 +1128,53 @@ class MarketAnalyzer:
                 data = json.loads(json_str)
                 
                 # 提取所有字段
+                action = data.get("action", "观望")
+                
                 # 对于价格字段，如果值为 0 或无效，使用默认值
                 entry_price_raw = data.get("entry_price", current_price)
-                stop_loss_raw = data.get("stop_loss", current_price * 0.95)
-                take_profit_raw = data.get("take_profit", current_price * 1.05)
+                stop_loss_raw = data.get("stop_loss")
+                take_profit_raw = data.get("take_profit")
                 
                 # 转换为浮点数，如果为 0 或无效则使用默认值
                 entry_price = float(entry_price_raw) if entry_price_raw and float(entry_price_raw) > 0 else current_price
-                stop_loss = float(stop_loss_raw) if stop_loss_raw and float(stop_loss_raw) > 0 else (current_price * 0.95 if current_price > 0 else 0)
-                take_profit = float(take_profit_raw) if take_profit_raw and float(take_profit_raw) > 0 else (current_price * 1.05 if current_price > 0 else 0)
+                
+                # 根据action设置默认止损止盈
+                if action == "做多":
+                    default_stop_loss = current_price * 0.97 if current_price > 0 else entry_price * 0.97
+                    default_take_profit = current_price * 1.05 if current_price > 0 else entry_price * 1.05
+                elif action == "做空":
+                    default_stop_loss = current_price * 1.03 if current_price > 0 else entry_price * 1.03
+                    default_take_profit = current_price * 0.95 if current_price > 0 else entry_price * 0.95
+                else:  # 观望
+                    default_stop_loss = entry_price * 0.95
+                    default_take_profit = entry_price * 1.05
+                
+                stop_loss = float(stop_loss_raw) if stop_loss_raw and float(stop_loss_raw) > 0 else default_stop_loss
+                take_profit = float(take_profit_raw) if take_profit_raw and float(take_profit_raw) > 0 else default_take_profit
+                
+                # 验证价格逻辑（如果action是观望，不验证）
+                if action != "观望" and entry_price > 0:
+                    if action == "做多":
+                        # 做多：止损应该低于入场价，止盈应该高于入场价
+                        if stop_loss >= entry_price:
+                            logger.warning(f"⚠️  做多止损价格不合理: {stop_loss} >= {entry_price}，自动调整")
+                            stop_loss = entry_price * 0.97
+                        if take_profit <= entry_price:
+                            logger.warning(f"⚠️  做多止盈价格不合理: {take_profit} <= {entry_price}，自动调整")
+                            take_profit = entry_price * 1.05
+                    elif action == "做空":
+                        # 做空：止损应该高于入场价，止盈应该低于入场价
+                        if stop_loss <= entry_price:
+                            logger.warning(f"⚠️  做空止损价格不合理: {stop_loss} <= {entry_price}，自动调整")
+                            stop_loss = entry_price * 1.03
+                        if take_profit >= entry_price:
+                            logger.warning(f"⚠️  做空止盈价格不合理: {take_profit} >= {entry_price}，自动调整")
+                            take_profit = entry_price * 0.95
                 
                 result = {
                     "symbol": data.get("symbol", symbol),
                     "trend": data.get("trend", "未知"),
-                    "action": data.get("action", "观望"),
+                    "action": action,
                     "confidence": float(data.get("confidence", 0.5)),
                     "entry_price": entry_price,
                     "stop_loss": stop_loss,
@@ -1149,6 +1182,7 @@ class MarketAnalyzer:
                     "support": float(data.get("support", current_price * 0.97)) if current_price > 0 else 0,
                     "resistance": float(data.get("resistance", current_price * 1.03)) if current_price > 0 else 0,
                     "risk_reward_ratio": data.get("risk_reward_ratio", "N/A"),
+                    "leverage": int(data.get("leverage", 1)) if data.get("leverage") else None,
                     "trading_standard": data.get("trading_standard", "未提供"),
                     "reason": data.get("reason", ""),
                     "warnings": data.get("warnings", []),
