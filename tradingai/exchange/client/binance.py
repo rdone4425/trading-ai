@@ -194,14 +194,15 @@ class BinanceClient:
                     response_text = await resp.text()
                 
                 if resp.status != 200:
-                    error_msg = f"API Error {resp.status}: {response_text}"
-                    logger.error(f"❌ {error_msg}")
+                    # 对于错误响应，只显示状态码，不显示 HTML 内容（太长）
+                    error_msg = f"HTTP {resp.status}"
+                    logger.debug(f"⚠️ API Error {error_msg}")
                     raise Exception(error_msg)
                 
                 try:
                     return await resp.json()
                 except Exception as e:
-                    logger.error(f"❌ 响应JSON解析失败: {e}")
+                    logger.debug(f"⚠️ 响应JSON解析失败: {e}")
                     logger.debug(f"   原始响应: {response_text[:200]}")
                     raise Exception(f"无法解析API响应: {e}")
                     
