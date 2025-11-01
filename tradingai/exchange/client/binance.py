@@ -82,31 +82,68 @@ class BinanceClient:
         url = f"{self.base_url}{endpoint}"
         
         if signed:
-            # 使用校准后的时间戳
-            params["timestamp"] = int(time.time() * 1000) + self.time_offset
+            # 使用经过校准的时间戳（关键！）
+            current_timestamp = int(time.time() * 1000) + self.time_offset
+            params["timestamp"] = current_timestamp
             
-            # 排序参数并生成查询字符串（不包括signature）
-            query_string = "&".join([f"{k}={v}" for k, v in sorted(params.items())])
-            signature = self._sign(query_string)
+            # 重要：按照币安要求生成查询字符串
+            # 1. 参数必须按字母顺序排序
+            # 2. 参数值必须是字符串
+            # 3. 使用&连接
+            sorted_params = []
+            for key in sorted(params.keys()):
+                value = params[key]
+                # 将所有值转换为字符串
+                if isinstance(value, bool):
+                    value_str = str(value).lower()
+                else:
+                    value_str = str(value)
+                sorted_params.append(f"{key}={value_str}")
+            
+            query_string = "&".join(sorted_params)
+            
+            # 2. 生成HMAC-SHA256签名
+            signature = hmac.new(
+                self.api_secret.encode('utf-8'),
+                query_string.encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
+            
             params["signature"] = signature
             
-            # 记录请求细节用于诊断（不包括密钥）
-            logger.debug(f"📤 签名请求: {method} {endpoint}")
-            logger.debug(f"   时间戳: {params['timestamp']} (偏移: {self.time_offset}ms)")
-            logger.debug(f"   参数数量: {len(params)}")
+            # 详细诊断日志
+            logger.debug(f"📤 签名请求:")
+            logger.debug(f"   端点: {method} {endpoint}")
+            logger.debug(f"   时间戳: {current_timestamp} (本地时间+{self.time_offset}ms偏移)")
+            logger.debug(f"   参数: {len(params)-1}个 (不含signature)")
+            if logger.isEnabledFor(10):  # DEBUG级别
+                logger.debug(f"   查询字符串(签名前): {query_string[:150]}...")
+                logger.debug(f"   生成的签名: {signature[:20]}...")
         
         try:
-            async with self.session.request(method, url, params=params, headers=headers, proxy=self.proxy, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            # 使用params作为查询参数
+            async with self.session.request(
+                method, url, 
+                params=params, 
+                headers=headers, 
+                proxy=self.proxy, 
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
                 response_text = await resp.text()
                 
                 if resp.status != 200:
                     error_msg = f"API Error {resp.status}: {response_text}"
                     logger.error(f"❌ {error_msg}")
                     
-                    # 如果是签名错误，尝试重新同步时间
+                    # 签名错误的特殊处理
                     if resp.status == 400 and "Signature" in response_text:
-                        logger.warning(f"⚠️ 检测到签名错误，正在重新同步服务器时间...")
-                        await self._sync_server_time()
+                        logger.warning(f"⚠️ 检测到签名错误: {response_text}")
+                        logger.warning(f"⚠️ 正在重新同步服务器时间...")
+                        try:
+                            await self._sync_server_time()
+                            logger.info(f"✅ 服务器时间已重新同步，偏移: {self.time_offset}ms")
+                        except Exception as sync_error:
+                            logger.error(f"❌ 重新同步失败: {sync_error}")
                     
                     raise Exception(error_msg)
                 
@@ -114,10 +151,11 @@ class BinanceClient:
                     return await resp.json()
                 except Exception as e:
                     logger.error(f"❌ 响应JSON解析失败: {e}")
-                    logger.debug(f"   原始响应: {response_text}")
-                    raise
+                    logger.debug(f"   原始响应: {response_text[:200]}")
+                    raise Exception(f"无法解析API响应: {e}")
+                    
         except asyncio.TimeoutError:
-            raise Exception("请求超时（可能是网络问题）")
+            raise Exception("请求超时 - API无响应")
         except aiohttp.ClientError as e:
             raise Exception(f"网络错误: {e}")
     
