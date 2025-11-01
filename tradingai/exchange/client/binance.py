@@ -153,6 +153,35 @@ class BinanceClient:
                     timeout=aiohttp.ClientTimeout(total=10)
                 ) as resp:
                     response_text = await resp.text()
+                    
+                    if resp.status != 200:
+                        error_msg = f"API Error {resp.status}: {response_text}"
+                        logger.error(f"❌ {error_msg}")
+                        
+                        # 签名错误的特殊处理
+                        if resp.status == 400 and "Signature" in response_text:
+                            logger.warning(f"⚠️ 检测到签名错误")
+                            logger.warning(f"   ℹ️ 调试信息:")
+                            logger.warning(f"      • 时间偏移: {self.time_offset}ms（已在初始化时同步）")
+                            logger.warning(f"      • 当前时间戳: {params.get('timestamp', 'N/A')} ms")
+                            logger.warning(f"      • API密钥长度: {len(self.api_key)} 字符")
+                            logger.warning(f"      • API密钥长度: {len(self.api_secret)} 字符")
+                            logger.warning(f"\n   💡 可能的原因:")
+                            logger.warning(f"      1. API密钥或密钥复制时有多余空格/换行")
+                            logger.warning(f"      2. API密钥和密钥不匹配")
+                            logger.warning(f"      3. 密钥已过期或被重置")
+                            logger.warning(f"\n   ✅ 解决方案:")
+                            logger.warning(f"      在币安官网重新生成API密钥和密钥")
+                            logger.warning(f"      确保复制时没有多余的空格或换行")
+                        
+                        raise Exception(error_msg)
+                    
+                    try:
+                        return await resp.json()
+                    except Exception as e:
+                        logger.error(f"❌ 响应JSON解析失败: {e}")
+                        logger.debug(f"   原始响应: {response_text[:200]}")
+                        raise Exception(f"无法解析API响应: {e}")
             else:
                 # 无签名请求可以用params参数
                 async with self.session.request(
@@ -167,23 +196,6 @@ class BinanceClient:
                 if resp.status != 200:
                     error_msg = f"API Error {resp.status}: {response_text}"
                     logger.error(f"❌ {error_msg}")
-                    
-                    # 签名错误的特殊处理
-                    if resp.status == 400 and "Signature" in response_text:
-                        logger.warning(f"⚠️ 检测到签名错误")
-                        logger.warning(f"   ℹ️ 调试信息:")
-                        logger.warning(f"      • 时间偏移: {self.time_offset}ms（已在初始化时同步）")
-                        logger.warning(f"      • 当前时间戳: {params.get('timestamp', 'N/A')} ms")
-                        logger.warning(f"      • API密钥长度: {len(self.api_key)} 字符")
-                        logger.warning(f"      • API密钥长度: {len(self.api_secret)} 字符")
-                        logger.warning(f"\n   💡 可能的原因:")
-                        logger.warning(f"      1. API密钥或密钥复制时有多余空格/换行")
-                        logger.warning(f"      2. API密钥和密钥不匹配")
-                        logger.warning(f"      3. 密钥已过期或被重置")
-                        logger.warning(f"\n   ✅ 解决方案:")
-                        logger.warning(f"      在币安官网重新生成API密钥和密钥")
-                        logger.warning(f"      确保复制时没有多余的空格或换行")
-                    
                     raise Exception(error_msg)
                 
                 try:
