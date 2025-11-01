@@ -652,35 +652,55 @@ class BinanceClient:
         return data
 
     async def _validate_api_key(self):
-        """验证API密钥是否有效"""
+        """验证API密钥的有效性"""
+        logger.info("🔍 开始验证API密钥...")
+        
+        # 第一步：检查密钥本身
         if not self.api_key or not self.api_secret:
-            logger.error(f"❌ API密钥或密钥为空!")
-            logger.error(f"   API密钥: {'✅ 已设置' if self.api_key else '❌ 未设置'}")
-            logger.error(f"   API密钥: {'✅ 已设置' if self.api_secret else '❌ 未设置'}")
-            logger.error(f"   请检查环境变量: BINANCE_API_KEY 和 BINANCE_API_SECRET")
-            return
+            logger.error("❌ API密钥或密钥为空")
+            return False
         
-        # 检查长度
-        if len(self.api_key) < 30:
-            logger.error(f"❌ API密钥长度过短: {len(self.api_key)} 字符 (应该 > 30)")
-            logger.error(f"   这可能不是真正的Binance API密钥")
-            return
+        # 第二步：检查隐形字符
+        if self.api_key != self.api_key.strip():
+            logger.warning(f"⚠️  API密钥前后有空格！")
+            logger.warning(f"   原长度: {len(self.api_key)}, 去除空格后: {len(self.api_key.strip())}")
         
-        if len(self.api_secret) < 30:
-            logger.error(f"❌ API密钥长度过短: {len(self.api_secret)} 字符 (应该 > 30)")
-            logger.error(f"   这可能不是真正的Binance API密钥")
-            return
+        if self.api_secret != self.api_secret.strip():
+            logger.warning(f"⚠️  API密钥前后有空格！")
+            logger.warning(f"   原长度: {len(self.api_secret)}, 去除空格后: {len(self.api_secret.strip())}")
         
-        logger.info(f"✅ API密钥格式检查通过")
-        logger.info(f"   API密钥: {self.api_key[:8]}...{self.api_key[-8:]} ({len(self.api_key)} 字符)")
-        logger.info(f"   API密钥: {self.api_secret[:8]}...{self.api_secret[-8:]} ({len(self.api_secret)} 字符)")
-        logger.info(f"   网络环境: {'🧪 Testnet' if self.testnet else '🚀 Mainnet'}")
+        # 第三步：检查不可见字符
+        def has_invisible_chars(s):
+            for i, char in enumerate(s):
+                if ord(char) < 32 or (127 <= ord(char) < 160):  # 控制字符和特殊字符
+                    return True, i, ord(char)
+            return False, -1, -1
         
-        # 尝试获取账户信息来验证密钥是否真正有效
-        try:
-            await self._validate_api_with_account_info()
-        except Exception as e:
-            logger.warning(f"⚠️ 无法验证API密钥: {e}")
+        has_inv_key, pos_key, ord_key = has_invisible_chars(self.api_key)
+        has_inv_secret, pos_secret, ord_secret = has_invisible_chars(self.api_secret)
+        
+        if has_inv_key:
+            logger.error(f"❌ API密钥在位置 {pos_key} 包含不可见字符 (ASCII: {ord_key})")
+        
+        if has_inv_secret:
+            logger.error(f"❌ API密钥在位置 {pos_secret} 包含不可见字符 (ASCII: {ord_secret})")
+        
+        # 第四步：检查长度
+        logger.info(f"   API密钥长度: {len(self.api_key)} 字符")
+        logger.info(f"   API密钥长度: {len(self.api_secret)} 字符")
+        
+        # 正常长度通常是 64 字符
+        if len(self.api_key) != 64 or len(self.api_secret) != 64:
+            logger.warning(f"⚠️  密钥长度不标准！通常应该是 64 字符")
+        
+        # 第五步：显示密钥的前后几个字符（用于调试）
+        if len(self.api_key) >= 8:
+            logger.debug(f"   API密钥: {self.api_key[:4]}...{self.api_key[-4:]}")
+        if len(self.api_secret) >= 8:
+            logger.debug(f"   API密钥: {self.api_secret[:4]}...{self.api_secret[-4:]}")
+        
+        # 第六步：尝试验证
+        await self._validate_api_with_account_info()
     
     async def _validate_api_with_account_info(self):
         """通过获取账户信息来验证API密钥的有效性"""

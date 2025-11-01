@@ -738,6 +738,16 @@ async def main():
             await platform.connect()
             logger.info("   ✅ 交易平台已连接")
         
+        # 🧪 测试：验证API密钥是否真的有效（通过获取余额）
+        try:
+            logger.info("\n🧪 API密钥有效性测试...")
+            balance = await platform.get_balance()
+            logger.info(f"   ✅ 余额查询成功: {balance:.2f} USDT")
+            logger.info(f"   📊 这证明了 API 密钥是有效的！")
+        except Exception as e:
+            logger.error(f"   ❌ 余额查询失败: {e}")
+            logger.error(f"   这说明 API 密钥可能存在问题，建议检查")
+        
         # 初始化 AI 分析器（如果启用）
         analyzer = None
         if config.USE_AI_ANALYSIS:
