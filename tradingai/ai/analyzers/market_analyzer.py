@@ -237,8 +237,20 @@ class MarketAnalyzer:
             result = self._parse_analysis_response(response, symbol, klines)
             
             # 6. 风险管理计算（如果启用，基于扫描器传递的指标）
-            if self.enable_risk_calculation and result['action'] != "观望":
-                result = await self._enhance_with_risk_management(result, indicators)
+            # 即使建议是"观望"，如果价格字段无效，也尝试计算（提供参考值）
+            if self.enable_risk_calculation:
+                if result['action'] != "观望":
+                    # 非观望建议：进行完整的风险计算
+                    result = await self._enhance_with_risk_management(result, indicators)
+                elif result.get('entry_price', 0) <= 0 or result.get('stop_loss', 0) <= 0 or result.get('take_profit', 0) <= 0:
+                    # 观望建议但价格字段无效：至少提供当前价格作为参考
+                    if result.get('entry_price', 0) <= 0 and klines:
+                        current_price = klines[-1].get('close', 0)
+                        if current_price > 0:
+                            result['entry_price'] = current_price
+                            result['stop_loss'] = current_price * 0.95
+                            result['take_profit'] = current_price * 1.05
+                            logger.debug(f"为观望建议设置了参考价格: {current_price}")
             
             result["provider"] = self.provider.get_provider_name()
             result["analyzed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -323,7 +335,7 @@ class MarketAnalyzer:
     async def review_trade(
         self,
         trade_data: Dict[str, Any],
-        **kwargs
+            **kwargs
     ) -> Dict[str, Any]:
         """
         复盘交易并提供改进建议
@@ -383,10 +395,10 @@ class MarketAnalyzer:
                 f"🔍 复盘交易: {trade_data.get('symbol')} "
                 f"{trade_data.get('direction')} "
                 f"({trade_data.get('profit_loss_percentage', 'N/A')}%)"
-            )
-            
-            response = await self.provider.chat(
-                messages=messages,
+        )
+        
+        response = await self.provider.chat(
+            messages=messages,
                 temperature=kwargs.get("temperature", 0.5),
                 max_tokens=kwargs.get("max_tokens", 3000)
             )
@@ -1041,7 +1053,17 @@ class MarketAnalyzer:
         Returns:
             解析后的分析结果
         """
-        current_price = klines[-1].get('close', 0) if klines else 0
+        # 获取当前价格（从最新K线的收盘价）
+        current_price = 0
+        if klines and len(klines) > 0:
+            latest_kline = klines[-1]
+            if isinstance(latest_kline, dict):
+                current_price = float(latest_kline.get('close', 0) or 0)
+            elif hasattr(latest_kline, 'close'):
+                current_price = float(latest_kline.close or 0)
+        
+        if current_price <= 0:
+            logger.warning(f"⚠️  无法获取当前价格，klines 数量: {len(klines) if klines else 0}")
         
         # 尝试解析 JSON 格式
         try:
@@ -1062,23 +1084,33 @@ class MarketAnalyzer:
                         json_str = response[start:end].strip()
                 else:
                     # 直接提取 JSON 部分
-                    start = response.find('{')
-                    end = response.rfind('}') + 1
-                    json_str = response[start:end]
+                start = response.find('{')
+                end = response.rfind('}') + 1
+                json_str = response[start:end]
                 
                 data = json.loads(json_str)
                 
                 # 提取所有字段
+                # 对于价格字段，如果值为 0 或无效，使用默认值
+                entry_price_raw = data.get("entry_price", current_price)
+                stop_loss_raw = data.get("stop_loss", current_price * 0.95)
+                take_profit_raw = data.get("take_profit", current_price * 1.05)
+                
+                # 转换为浮点数，如果为 0 或无效则使用默认值
+                entry_price = float(entry_price_raw) if entry_price_raw and float(entry_price_raw) > 0 else current_price
+                stop_loss = float(stop_loss_raw) if stop_loss_raw and float(stop_loss_raw) > 0 else (current_price * 0.95 if current_price > 0 else 0)
+                take_profit = float(take_profit_raw) if take_profit_raw and float(take_profit_raw) > 0 else (current_price * 1.05 if current_price > 0 else 0)
+                
                 result = {
                     "symbol": data.get("symbol", symbol),
                     "trend": data.get("trend", "未知"),
                     "action": data.get("action", "观望"),
                     "confidence": float(data.get("confidence", 0.5)),
-                    "entry_price": float(data.get("entry_price", current_price)),
-                    "stop_loss": float(data.get("stop_loss", current_price * 0.95)),
-                    "take_profit": float(data.get("take_profit", current_price * 1.05)),
-                    "support": float(data.get("support", current_price * 0.97)),
-                    "resistance": float(data.get("resistance", current_price * 1.03)),
+                    "entry_price": entry_price,
+                    "stop_loss": stop_loss,
+                    "take_profit": take_profit,
+                    "support": float(data.get("support", current_price * 0.97)) if current_price > 0 else 0,
+                    "resistance": float(data.get("resistance", current_price * 1.03)) if current_price > 0 else 0,
                     "risk_reward_ratio": data.get("risk_reward_ratio", "N/A"),
                     "trading_standard": data.get("trading_standard", "未提供"),
                     "reason": data.get("reason", ""),
@@ -1108,20 +1140,25 @@ class MarketAnalyzer:
         # 提取置信度
         confidence = 0.5
         if any(word in response_lower for word in ["强烈", "高度", "very", "strong"]):
-            confidence = 0.8
+                confidence = 0.8
         elif any(word in response_lower for word in ["谨慎", "低", "weak"]):
             confidence = 0.3
+        
+        # 确保价格有效
+        entry_price = current_price if current_price > 0 else 0
+        stop_loss = current_price * (0.97 if action == "做多" else 1.03) if current_price > 0 else 0
+        take_profit = current_price * (1.05 if action == "做多" else 0.95) if current_price > 0 else 0
         
         return {
             "symbol": symbol,
             "trend": "未知",
             "action": action,
             "confidence": confidence,
-            "entry_price": current_price,
-            "stop_loss": current_price * (0.97 if action == "做多" else 1.03),
-            "take_profit": current_price * (1.05 if action == "做多" else 0.95),
-            "support": current_price * 0.97,
-            "resistance": current_price * 1.03,
+            "entry_price": entry_price,
+            "stop_loss": stop_loss,
+            "take_profit": take_profit,
+            "support": current_price * 0.97 if current_price > 0 else 0,
+            "resistance": current_price * 1.03 if current_price > 0 else 0,
             "risk_reward_ratio": "N/A",
             "reason": response,
             "warnings": ["AI 响应未使用 JSON 格式，解析可能不准确"],
