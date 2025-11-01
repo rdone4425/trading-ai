@@ -36,6 +36,8 @@ class BinanceClient:
     
     async def __aenter__(self):
         self.session = aiohttp.ClientSession()
+        # 初始化时验证API密钥
+        await self._validate_api_key()
         # 初始化时获取服务器时间以校准时间偏移
         try:
             await self._sync_server_time()
@@ -635,4 +637,80 @@ class BinanceClient:
         params = {"symbol": symbol}
         data = await self._request("DELETE", "/fapi/v1/allOpenOrders", params, signed=True)
         return data
+
+    async def _validate_api_key(self):
+        """验证API密钥是否有效"""
+        if not self.api_key or not self.api_secret:
+            logger.error(f"❌ API密钥或密钥为空!")
+            logger.error(f"   API密钥: {'✅ 已设置' if self.api_key else '❌ 未设置'}")
+            logger.error(f"   API密钥: {'✅ 已设置' if self.api_secret else '❌ 未设置'}")
+            logger.error(f"   请检查环境变量: BINANCE_API_KEY 和 BINANCE_API_SECRET")
+            return
+        
+        # 检查长度
+        if len(self.api_key) < 30:
+            logger.error(f"❌ API密钥长度过短: {len(self.api_key)} 字符 (应该 > 30)")
+            logger.error(f"   这可能不是真正的Binance API密钥")
+            return
+        
+        if len(self.api_secret) < 30:
+            logger.error(f"❌ API密钥长度过短: {len(self.api_secret)} 字符 (应该 > 30)")
+            logger.error(f"   这可能不是真正的Binance API密钥")
+            return
+        
+        logger.info(f"✅ API密钥格式检查通过")
+        logger.info(f"   API密钥: {self.api_key[:8]}...{self.api_key[-8:]} ({len(self.api_key)} 字符)")
+        logger.info(f"   API密钥: {self.api_secret[:8]}...{self.api_secret[-8:]} ({len(self.api_secret)} 字符)")
+        logger.info(f"   网络环境: {'🧪 Testnet' if self.testnet else '🚀 Mainnet'}")
+        
+        # 尝试获取账户信息来验证密钥是否真正有效
+        try:
+            await self._validate_api_with_account_info()
+        except Exception as e:
+            logger.warning(f"⚠️ 无法验证API密钥: {e}")
+    
+    async def _validate_api_with_account_info(self):
+        """通过获取账户信息来验证API密钥的有效性"""
+        try:
+            params = {
+                "timestamp": int(time.time() * 1000) + self.time_offset
+            }
+            params["recvWindow"] = 5000
+            
+            sorted_params = []
+            for key in sorted(params.keys()):
+                value = params[key]
+                if isinstance(value, bool):
+                    value_str = str(value).lower()
+                else:
+                    value_str = str(value)
+                sorted_params.append(f"{key}={value_str}")
+            
+            query_string = "&".join(sorted_params)
+            signature = hmac.new(
+                self.api_secret.encode('utf-8'),
+                query_string.encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
+            
+            params["signature"] = signature
+            
+            headers = {"X-MBX-APIKEY": self.api_key}
+            url = f"{self.base_url}/fapi/v1/account"
+            
+            async with self.session.get(url, params=params, headers=headers, proxy=self.proxy, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 200:
+                    logger.info(f"✅ API密钥验证成功！")
+                elif resp.status == 401:
+                    logger.error(f"❌ API认证失败（401）- API密钥或密钥无效")
+                elif resp.status == 400:
+                    text = await resp.text()
+                    if "Signature" in text:
+                        logger.error(f"❌ 签名验证失败 - 检查密钥是否匹配")
+                    logger.error(f"   响应: {text}")
+                else:
+                    text = await resp.text()
+                    logger.warning(f"⚠️ API验证返回 {resp.status}: {text}")
+        except Exception as e:
+            logger.debug(f"验证API时出错: {e}")
 
