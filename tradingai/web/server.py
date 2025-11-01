@@ -264,17 +264,21 @@ class WebServer:
                         loop.close()
                         
                         if balance and balance > 0:
+                            logger.debug(f"✅ 从交易所获取余额成功: {balance} USDT")
                             return jsonify({
                                 'success': True,
                                 'balance': balance,
                                 'source': 'exchange'
                             })
+                        else:
+                            logger.warning(f"⚠️  从交易所获取的余额无效: {balance}")
                     except Exception as e:
-                        logger.debug(f"从交易所获取余额失败: {e}")
+                        logger.warning(f"⚠️  从交易所获取余额失败: {e}")
                 
                 # 如果获取失败，使用配置值
                 from tradingai import config
-                balance = getattr(config, 'ACCOUNT_BALANCE', 0)
+                balance = getattr(config, 'ACCOUNT_BALANCE', 10000)
+                logger.debug(f"使用配置值作为备用余额: {balance} USDT")
                 
                 return jsonify({
                     'success': True,
