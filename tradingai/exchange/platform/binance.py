@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 from .base import BasePlatform
 from ..client.binance import BinanceClient
 from ...logger import get_logger
+from ... import config
 
 logger = get_logger("exchange.platform.binance")
 
@@ -12,10 +13,14 @@ logger = get_logger("exchange.platform.binance")
 class BinancePlatform(BasePlatform):
     """币安交易平台"""
     
-    def __init__(self, api_key: str = "", api_secret: str = "", testnet: bool = True):
+    def __init__(self, api_key: str = "", api_secret: str = "", testnet: bool = None):
         self.api_key = api_key
         self.api_secret = api_secret
-        self.testnet = testnet
+        # 如果没有显式指定testnet，从config中读取
+        if testnet is None:
+            self.testnet = config.TESTNET
+        else:
+            self.testnet = testnet
         self.client: Optional[BinanceClient] = None
     
     async def connect(self):
@@ -24,7 +29,10 @@ class BinancePlatform(BasePlatform):
         await self.client.__aenter__()
         
         proxy_info = f" (代理: {self.client.proxy})" if self.client.proxy else ""
-        logger.info(f"✅ 已连接到 {'币安测试网' if self.testnet else '币安主网'}{proxy_info}")
+        network_name = '币安测试网' if self.testnet else '币安主网'
+        logger.info(f"✅ 已连接到 {network_name}{proxy_info}")
+        logger.debug(f"   网络环境: {config.TRADING_ENVIRONMENT}")
+        logger.debug(f"   API端点: {self.client.base_url}")
     
     async def disconnect(self):
         """断开连接"""

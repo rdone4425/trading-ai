@@ -696,21 +696,33 @@ class BinanceClient:
             params["signature"] = signature
             
             headers = {"X-MBX-APIKEY": self.api_key}
+            # 使用期货账户信息端点（支持两个网络）
             url = f"{self.base_url}/fapi/v1/account"
+            
+            logger.debug(f"🔍 验证API密钥...")
+            logger.debug(f"   URL: {url}")
+            logger.debug(f"   网络: {'Testnet' if self.testnet else 'Mainnet'}")
             
             async with self.session.get(url, params=params, headers=headers, proxy=self.proxy, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 if resp.status == 200:
                     logger.info(f"✅ API密钥验证成功！")
                 elif resp.status == 401:
                     logger.error(f"❌ API认证失败（401）- API密钥或密钥无效")
+                    logger.error(f"   检查: BINANCE_API_KEY 和 BINANCE_API_SECRET 是否正确")
                 elif resp.status == 400:
                     text = await resp.text()
                     if "Signature" in text:
                         logger.error(f"❌ 签名验证失败 - 检查密钥是否匹配")
-                    logger.error(f"   响应: {text}")
+                    logger.error(f"   响应: {text[:200]}")
+                elif resp.status == 404:
+                    logger.error(f"❌ 端点不存在（404）")
+                    logger.error(f"   可能原因：")
+                    logger.error(f"   1. 网络设置错误（用了testnet密钥但在mainnet，反之亦然）")
+                    logger.error(f"   2. 代理或网络连接问题")
+                    logger.error(f"   URL: {url}")
                 else:
                     text = await resp.text()
-                    logger.warning(f"⚠️ API验证返回 {resp.status}: {text}")
+                    logger.warning(f"⚠️ API验证返回 {resp.status}: {text[:200]}")
         except Exception as e:
             logger.debug(f"验证API时出错: {e}")
 
