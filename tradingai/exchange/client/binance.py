@@ -86,6 +86,11 @@ class BinanceClient:
             current_timestamp = int(time.time() * 1000) + self.time_offset
             params["timestamp"] = current_timestamp
             
+            # 添加recvWindow参数（给服务器处理请求的容差时间）
+            # 默认5000ms（5秒）
+            if "recvWindow" not in params:
+                params["recvWindow"] = 5000
+            
             # 重要：按照币安要求生成查询字符串
             # 1. 参数必须按字母顺序排序
             # 2. 参数值必须是字符串
@@ -115,10 +120,16 @@ class BinanceClient:
             logger.debug(f"📤 签名请求:")
             logger.debug(f"   端点: {method} {endpoint}")
             logger.debug(f"   时间戳: {current_timestamp} (本地时间+{self.time_offset}ms偏移)")
+            logger.debug(f"   API密钥长度: {len(self.api_key)} 字符")
+            logger.debug(f"   API密钥有效: {self.api_key is not None and len(self.api_key) > 0}")
             logger.debug(f"   参数: {len(params)-1}个 (不含signature)")
             if logger.isEnabledFor(10):  # DEBUG级别
                 logger.debug(f"   查询字符串(签名前): {query_string[:150]}...")
                 logger.debug(f"   生成的签名: {signature[:20]}...")
+                # 验证参数中没有None值
+                for k, v in params.items():
+                    if v is None:
+                        logger.warning(f"⚠️  参数 {k} 的值为 None!")
         
         try:
             # 使用params作为查询参数
