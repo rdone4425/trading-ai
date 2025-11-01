@@ -12,6 +12,7 @@ from tradingai.scanner import MarketScanner
 from tradingai.indicators import IndicatorEngine, IndicatorConfigParser
 from tradingai.ai import AIProviderFactory
 from tradingai.ai.analyzers import MarketAnalyzer
+from tradingai.trader import Trader
 from tradingai.logger import get_logger
 from typing import List, Dict, Any, Optional
 
@@ -333,14 +334,15 @@ def _process_trades_for_review(closed_trades: List[Dict]) -> List[Dict]:
     return complete_trades
 
 
-async def scan_callback(scanner, symbols, tickers):
+async def scan_callback(scanner, symbols, tickers, trader=None):
     """
-    扫描回调函数（支持 AI 分析）
+    扫描回调函数（支持 AI 分析和自动交易）
     
     Args:
         scanner: 市场扫描器实例
         symbols: 扫描到的交易对列表
         tickers: 交易对的行情数据字典
+        trader: 交易执行器实例（可选）
     """
     logger.info("")
     logger.info(f"📊 扫描结果: {len(symbols)} 个交易对")
@@ -394,6 +396,59 @@ async def scan_callback(scanner, symbols, tickers):
             if config.SAVE_ANALYSIS_RESULTS:
                 scanner.save_analysis_results()
             
+            # 执行自动交易（仅在非观察模式且有交易执行器时）
+            # 从 scanner 获取 trader（如果参数没有传递）
+            if not trader:
+                trader = getattr(scanner, 'trader', None)
+            
+            if trader and config.TRADING_ENVIRONMENT != "observe":
+                high_conf_results = [
+                    r for r in scanner.analysis_results 
+                    if r.get('confidence', 0) >= config.AI_CONFIDENCE_THRESHOLD 
+                    and r.get('action') != '观望'
+                ]
+                
+                if high_conf_results:
+                    logger.info("")
+                    logger.info("="*60)
+                    logger.info("💰 开始执行自动交易")
+                    logger.info("="*60)
+                    
+                    executed_count = 0
+                    skipped_count = 0
+                    
+                    for result in high_conf_results:
+                        symbol = result.get('symbol')
+                        action = result.get('action')
+                        confidence = result.get('confidence', 0)
+                        
+                        logger.info(f"\n📈 {symbol}: {action} (置信度: {confidence:.1%})")
+                        
+                        # 执行交易
+                        trade_result = await trader.execute_trade(result)
+                        
+                        if trade_result.get('success'):
+                            executed_count += 1
+                            logger.info(f"   ✅ 交易执行成功: {trade_result.get('message')}")
+                            
+                            # 显示订单信息
+                            orders = trade_result.get('orders', {})
+                            if orders.get('entry'):
+                                logger.info(f"   📝 入场订单ID: {orders['entry'].get('order_id', 'N/A')}")
+                            if orders.get('stop_loss'):
+                                logger.info(f"   🛡️  止损订单ID: {orders['stop_loss'].get('order_id', 'N/A')}")
+                            if orders.get('take_profit'):
+                                logger.info(f"   🎯 止盈订单ID: {orders['take_profit'].get('order_id', 'N/A')}")
+                        else:
+                            skipped_count += 1
+                            reason = trade_result.get('message', '未知原因')
+                            logger.info(f"   ⏭️  跳过交易: {reason}")
+                    
+                    logger.info("")
+                    logger.info(f"📊 交易执行汇总:")
+                    logger.info(f"   执行成功: {executed_count} 笔")
+                    logger.info(f"   跳过: {skipped_count} 笔")
+            
             # 学习和复盘（辅助分析改进）
             if scanner.analyzer and scanner.analysis_results:
                 # 传递平台实例以获取交易历史
@@ -421,7 +476,7 @@ async def scan_callback(scanner, symbols, tickers):
     logger.info("")
 
 
-async def run_single_scan(scanner):
+async def run_single_scan(scanner, trader=None):
     """执行单次扫描"""
     logger.info(f"Scanner analyzer: {scanner.analyzer}")
     logger.info(f"Scanner indicator_engine: {scanner.indicator_engine}")
@@ -466,6 +521,53 @@ async def run_single_scan(scanner):
                 if 'margin_required' in result:
                     logger.info(f"    保证金: {format_price(result['margin_required'])}")
         
+        # 执行交易（仅在非观察模式且有交易执行器时）
+        # 从 scanner 获取 trader（如果 run_single_scan 中没有传递）
+        if not trader:
+            trader = getattr(scanner, 'trader', None)
+        
+        if trader and high_conf:
+            logger.info("")
+            logger.info("="*60)
+            logger.info("💰 开始执行交易")
+            logger.info("="*60)
+            
+            executed_count = 0
+            skipped_count = 0
+            
+            for result in high_conf:
+                symbol = result.get('symbol')
+                action = result.get('action')
+                confidence = result.get('confidence', 0)
+                
+                logger.info(f"\n📈 {symbol}: {action} (置信度: {confidence:.1%})")
+                
+                # 执行交易
+                trade_result = await trader.execute_trade(result)
+                
+                if trade_result.get('success'):
+                    executed_count += 1
+                    logger.info(f"   ✅ 交易执行成功: {trade_result.get('message')}")
+                    
+                    # 显示订单信息
+                    orders = trade_result.get('orders', {})
+                    if orders.get('entry'):
+                        logger.info(f"   📝 入场订单ID: {orders['entry'].get('order_id', 'N/A')}")
+                    if orders.get('stop_loss'):
+                        logger.info(f"   🛡️  止损订单ID: {orders['stop_loss'].get('order_id', 'N/A')}")
+                    if orders.get('take_profit'):
+                        logger.info(f"   🎯 止盈订单ID: {orders['take_profit'].get('order_id', 'N/A')}")
+                else:
+                    skipped_count += 1
+                    reason = trade_result.get('message', '未知原因')
+                    logger.info(f"   ⏭️  跳过交易: {reason}")
+            
+            logger.info("")
+            logger.info(f"📊 交易执行汇总:")
+            logger.info(f"   执行成功: {executed_count} 笔")
+            logger.info(f"   跳过: {skipped_count} 笔")
+            logger.info("")
+        
         # 自动学习和复盘（辅助分析，提升分析质量）
         if scanner.analyzer:
             analysis_results = results if 'results' in locals() else (scanner.analysis_results if hasattr(scanner, 'analysis_results') else [])
@@ -505,9 +607,12 @@ async def run_auto_scan(scanner):
     logger.info("提示: 按 Ctrl+C 停止扫描")
     logger.info("")
     
-    # 启动自动扫描
+    # 获取交易执行器（如果存在）
+    trader = getattr(scanner, 'trader', None)
+    
+    # 启动自动扫描（传递 trader 参数）
     await scanner.start_auto_scan(
-        callback=scan_callback,
+        callback=lambda s, symbols, tickers: scan_callback(s, symbols, tickers, trader),
         align_to_kline=True,
         wait_for_close=True
     )
@@ -583,6 +688,20 @@ async def main():
         else:
             logger.info("   AI 分析: 已禁用")
         
+        # 初始化交易执行器（仅在非观察模式下启用）
+        trader = None
+        if config.TRADING_ENVIRONMENT != "observe":
+            logger.info("初始化交易执行器...")
+            try:
+                trader = Trader(platform)
+                logger.info("   ✅ 交易执行器初始化成功")
+                logger.info(f"   ⚠️  交易模式: {config.TRADING_ENVIRONMENT} (将执行真实交易)")
+            except Exception as e:
+                logger.error(f"   ❌ 交易执行器初始化失败: {e}", exc_info=True)
+                trader = None
+        else:
+            logger.info("   交易执行: 观察模式（已禁用）")
+        
         logger.info("")
         
         # 创建市场扫描器（集成 AI 分析器和指标引擎）
@@ -592,6 +711,8 @@ async def main():
         )
         # 将平台实例传递给扫描器（用于后续复盘时获取交易历史）
         scanner.platform = platform
+        # 将交易执行器传递给扫描器（用于自动执行交易）
+        scanner.trader = trader
         await scanner.connect()
         
         # 选择扫描模式
@@ -604,7 +725,7 @@ async def main():
             await run_auto_scan(scanner)
         else:
             logger.info("模式: 单次扫描")
-            await run_single_scan(scanner)
+            await run_single_scan(scanner, trader)
     
     except KeyboardInterrupt:
         logger.info("")
