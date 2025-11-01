@@ -1072,13 +1072,24 @@
                     updateAnalysisList();
                     updateCharts(result.data);
                     
-                    // 更新账户余额（显示来源标识）
+                    // 更新账户余额（显示来源标识和错误信息）
                     if (result.data.account_balance !== undefined && result.data.account_balance !== null) {
                         const balance = parseFloat(result.data.account_balance).toFixed(2);
                         const source = result.data.balance_source || 'config';
                         const sourceText = source === 'exchange' ? '（实盘余额）' : '（配置值）';
-                        document.getElementById('accountBalance').textContent = 
-                            balance + ' USDT' + sourceText;
+                        const balanceElement = document.getElementById('accountBalance');
+                        balanceElement.textContent = balance + ' USDT' + sourceText;
+                        
+                        // 如果有错误信息，添加提示样式
+                        if (result.data.balance_error && source === 'config') {
+                            balanceElement.title = '获取余额失败: ' + result.data.balance_error + '\n提示: 请检查API密钥权限或网络连接';
+                            balanceElement.style.cursor = 'help';
+                            balanceElement.style.color = '#ffa500'; // 橙色警告
+                        } else if (source === 'exchange') {
+                            balanceElement.title = '实盘余额已成功获取';
+                            balanceElement.style.cursor = 'default';
+                            balanceElement.style.color = ''; // 恢复默认颜色
+                        }
                     }
                     
                     // 更新运行时间

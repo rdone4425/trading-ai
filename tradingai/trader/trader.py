@@ -40,6 +40,7 @@ class Trader:
         self.active_positions: Dict[str, Dict] = {}  # 当前活跃持仓 {symbol: position_info}
         self._cached_balance: Optional[float] = None  # 缓存的余额（避免频繁请求）
         self._balance_cache_time: Optional[float] = None  # 余额缓存时间
+        self.active_orders: Dict[str, Dict] = {}  # 活跃订单 {symbol: {stop_loss_order_id, take_profit_order_id}}
         
         logger.info("交易执行器已初始化")
     
@@ -378,9 +379,25 @@ class Trader:
                 logger.warning(f"⚠️  止盈设置失败，持仓仍有止损保护")
                 take_profit_order = {"error": str(e)}
             
-            # 11. 记录持仓（在执行成功后立即记录，防止重复开单）
+            # 11. 记录持仓和订单（在执行成功后立即记录，防止重复开单）
             await self._update_active_position(symbol, position_side, entry_order)
+            
+            # 保存止盈止损订单ID（用于平仓时取消）
+            stop_loss_order_id = stop_loss_order.get('order_id') if isinstance(stop_loss_order, dict) else None
+            take_profit_order_id = take_profit_order.get('order_id') if isinstance(take_profit_order, dict) else None
+            
+            self.active_orders[symbol] = {
+                "stop_loss_order_id": stop_loss_order_id,
+                "take_profit_order_id": take_profit_order_id,
+                "position_side": position_side,
+                "updated_at": datetime.now().isoformat()
+            }
+            
             logger.info(f"📝 已记录持仓: {symbol} {position_side} 到本地缓存")
+            if stop_loss_order_id:
+                logger.debug(f"   止损订单ID: {stop_loss_order_id}")
+            if take_profit_order_id:
+                logger.debug(f"   止盈订单ID: {take_profit_order_id}")
             
             return {
                 "success": True,
@@ -658,7 +675,7 @@ class Trader:
     
     async def close_position(self, symbol: str, position_side: str = None) -> Dict:
         """
-        平仓
+        平仓（会自动取消止盈止损订单）
         
         Args:
             symbol: 交易对
@@ -671,6 +688,8 @@ class Trader:
             positions = await self.platform.get_position(symbol)
             
             results = []
+            cancelled_orders = []
+            
             for position in positions:
                 if position['symbol'] == symbol:
                     if position_side and position['position_side'] != position_side:
@@ -695,15 +714,59 @@ class Trader:
                     results.append(order)
                     logger.info(f"✅ 已平仓: {symbol} {position['position_side']}")
             
+            # 取消止盈止损订单（必须在平仓后进行）
+            if symbol in self.active_orders:
+                order_info = self.active_orders[symbol]
+                stop_loss_order_id = order_info.get('stop_loss_order_id')
+                take_profit_order_id = order_info.get('take_profit_order_id')
+                
+                # 尝试取消止损订单
+                if stop_loss_order_id:
+                    try:
+                        await self.platform.cancel_order(symbol, stop_loss_order_id)
+                        cancelled_orders.append(f"止损订单({stop_loss_order_id})")
+                        logger.info(f"✅ 已取消止损订单: {symbol} #{stop_loss_order_id}")
+                    except Exception as e:
+                        logger.warning(f"⚠️  取消止损订单失败: {symbol} #{stop_loss_order_id}, {e}")
+                        # 订单可能已经触发或不存在，继续执行
+                
+                # 尝试取消止盈订单
+                if take_profit_order_id:
+                    try:
+                        await self.platform.cancel_order(symbol, take_profit_order_id)
+                        cancelled_orders.append(f"止盈订单({take_profit_order_id})")
+                        logger.info(f"✅ 已取消止盈订单: {symbol} #{take_profit_order_id}")
+                    except Exception as e:
+                        logger.warning(f"⚠️  取消止盈订单失败: {symbol} #{take_profit_order_id}, {e}")
+                        # 订单可能已经触发或不存在，继续执行
+                
+                # 如果订单ID记录不完整，取消该交易对的所有订单（保险措施）
+                if not stop_loss_order_id and not take_profit_order_id:
+                    try:
+                        await self.platform.cancel_all_orders(symbol)
+                        logger.info(f"✅ 已取消 {symbol} 的所有挂单（保险措施）")
+                        cancelled_orders.append("所有挂单（保险措施）")
+                    except Exception as e:
+                        logger.warning(f"⚠️  取消所有订单失败: {symbol}, {e}")
+                
+                # 清除订单记录
+                del self.active_orders[symbol]
+                logger.debug(f"🗑️  已清除订单记录: {symbol}")
+            
             # 清除活跃持仓记录（平仓后可以重新开单）
             if symbol in self.active_positions:
                 del self.active_positions[symbol]
                 logger.info(f"🗑️  已清除持仓缓存: {symbol}，现在可以重新开仓")
             
+            message = f"已平仓: {symbol}"
+            if cancelled_orders:
+                message += f"，已取消: {', '.join(cancelled_orders)}"
+            
             return {
                 "success": True,
-                "message": f"已平仓: {symbol}",
-                "orders": results
+                "message": message,
+                "orders": results,
+                "cancelled_orders": cancelled_orders
             }
         
         except Exception as e:

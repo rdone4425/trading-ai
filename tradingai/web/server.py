@@ -122,6 +122,7 @@ class WebServer:
                 # 获取真实账户余额（优先从交易所获取）
                 account_balance = None
                 balance_source = 'config'  # 默认来源为配置值
+                balance_error = None  # 记录错误信息
                 if self.platform:
                     try:
                         import asyncio
@@ -132,9 +133,17 @@ class WebServer:
                         if balance and balance > 0:
                             account_balance = balance
                             balance_source = 'exchange'  # 来自交易所
+                            logger.debug(f"✅ 成功从交易所获取余额: {balance:.2f} USDT")
+                        else:
+                            balance_error = "余额为0或无效"
+                            logger.warning(f"⚠️  从交易所获取的余额无效: {balance}")
                         loop.close()
                     except Exception as e:
-                        logger.debug(f"从交易所获取余额失败: {e}")
+                        balance_error = str(e)
+                        logger.warning(f"⚠️  从交易所获取余额失败: {e}，将使用配置值")
+                else:
+                    balance_error = "未连接交易平台（可能是观察模式）"
+                    logger.debug("ℹ️  未连接交易平台，使用配置余额")
                 
                 # 如果获取失败，使用配置值
                 if account_balance is None:
@@ -151,6 +160,8 @@ class WebServer:
                 # 添加到返回数据中
                 data['account_balance'] = account_balance
                 data['balance_source'] = balance_source  # 余额来源标识
+                if balance_error:
+                    data['balance_error'] = balance_error  # 余额获取错误信息（用于调试）
                 data['uptime_seconds'] = uptime_seconds
                 
                 return jsonify({
