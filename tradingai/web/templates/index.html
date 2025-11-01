@@ -600,15 +600,38 @@
         
         .analysis-details {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px 20px;
             font-size: 0.85em;
+            margin-top: 12px;
         }
         
         .detail-row {
             display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
+            flex-direction: column;
+            gap: 4px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .detail-row:hover {
+            background: rgba(102, 126, 234, 0.05);
+            border-color: rgba(102, 126, 234, 0.2);
+        }
+        
+        .detail-row .detail-label {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        
+        .detail-row .detail-value {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--text-primary);
         }
         
         .detail-label {
@@ -731,6 +754,28 @@
         let profitChart = null;
         let allAnalysisData = [];
         let currentFilter = 'all';
+        
+        // 格式化价格（智能选择小数位数）
+        function formatPrice(price) {
+            if (!price && price !== 0) return '-';
+            const num = parseFloat(price);
+            if (isNaN(num)) return '-';
+            
+            // 处理非常小的数字（科学计数法）
+            if (Math.abs(num) < 0.0001) {
+                // 使用更多小数位显示
+                return num.toFixed(8).replace(/\.?0+$/, '');
+            } else if (Math.abs(num) < 1) {
+                // 小于1的数字，显示4-6位小数
+                return num.toFixed(6).replace(/\.?0+$/, '');
+            } else if (Math.abs(num) < 100) {
+                // 1-100，显示2-4位小数
+                return num.toFixed(4).replace(/\.?0+$/, '');
+            } else {
+                // 大于100，显示2位小数
+                return num.toFixed(2);
+            }
+        }
         
         // 切换分析理由展开/收起
         function toggleReason(header) {
@@ -914,25 +959,43 @@
                     </div>
                     <div class="analysis-details">
                         <div class="detail-row">
-                            <span class="detail-label"><i class="fas fa-arrow-up" style="margin-right: 4px;"></i>入场价:</span>
-                            <span class="detail-value">${item.entry_price ? parseFloat(item.entry_price).toFixed(2) : '-'}</span>
+                            <div class="detail-label">
+                                <i class="fas fa-sign-in-alt" style="margin-right: 6px; color: var(--primary-color);"></i>
+                                入场价
+                            </div>
+                            <div class="detail-value" style="color: var(--primary-color);">
+                                ${item.entry_price ? formatPrice(item.entry_price) : '-'}
+                            </div>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label"><i class="fas fa-arrow-down" style="margin-right: 4px; color: var(--danger-color);"></i>止损:</span>
-                            <span class="detail-value" style="color: var(--danger-color);">${item.stop_loss ? parseFloat(item.stop_loss).toFixed(2) : '-'}</span>
+                            <div class="detail-label">
+                                <i class="fas fa-arrow-down" style="margin-right: 6px; color: var(--danger-color);"></i>
+                                止损价
+                            </div>
+                            <div class="detail-value" style="color: var(--danger-color);">
+                                ${item.stop_loss ? formatPrice(item.stop_loss) : '-'}
+                            </div>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label"><i class="fas fa-arrow-up" style="margin-right: 4px; color: var(--success-color);"></i>止盈:</span>
-                            <span class="detail-value" style="color: var(--success-color);">${item.take_profit ? parseFloat(item.take_profit).toFixed(2) : '-'}</span>
+                            <div class="detail-label">
+                                <i class="fas fa-arrow-up" style="margin-right: 6px; color: var(--success-color);"></i>
+                                止盈价
+                            </div>
+                            <div class="detail-value" style="color: var(--success-color);">
+                                ${item.take_profit ? formatPrice(item.take_profit) : '-'}
+                            </div>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label"><i class="fas fa-chart-line" style="margin-right: 4px;"></i>信心度:</span>
-                            <span class="detail-value">
+                            <div class="detail-label">
+                                <i class="fas fa-chart-line" style="margin-right: 6px;"></i>
+                                信心度
+                            </div>
+                            <div class="detail-value">
                                 ${((item.confidence || 0) * 100).toFixed(0)}%
-                                <span style="font-size: 0.8em; margin-left: 8px; color: ${(item.confidence || 0) >= 0.6 ? 'var(--success-color)' : (item.confidence || 0) >= 0.4 ? 'var(--warning-color)' : 'var(--danger-color)'};">
+                                <span style="font-size: 0.75em; margin-left: 6px; padding: 2px 8px; border-radius: 10px; background: ${(item.confidence || 0) >= 0.6 ? 'rgba(16, 185, 129, 0.2)' : (item.confidence || 0) >= 0.4 ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; color: ${(item.confidence || 0) >= 0.6 ? 'var(--success-color)' : (item.confidence || 0) >= 0.4 ? 'var(--warning-color)' : 'var(--danger-color)'};">
                                     ${(item.confidence || 0) >= 0.6 ? '高' : (item.confidence || 0) >= 0.4 ? '中' : '低'}
                                 </span>
-                            </span>
+                            </div>
                         </div>
                     </div>
                     ${item.reason ? `

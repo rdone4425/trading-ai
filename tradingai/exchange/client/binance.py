@@ -1,6 +1,7 @@
 """
 币安客户端
 """
+import asyncio
 import aiohttp
 import hmac
 import hashlib
