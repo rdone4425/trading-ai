@@ -38,7 +38,9 @@ WEB_PORT = int(os.getenv('WEB_PORT', '8080'))
 
 # ==================== 扫描配置 ====================
 # 基础配置
-LOOKBACK = int(os.getenv("LOOKBACK", "100"))
+# 回看K线数量（用于计算技术指标，建议根据时间周期调整）
+# 币安API支持最多单次1000根，系统会自动分批获取更多数据
+LOOKBACK = int(os.getenv("LOOKBACK", "500"))
 DEFAULT_QUOTE = os.getenv("DEFAULT_QUOTE", "USDT")
 
 # K线类型：closed(已完成), open(进行中)

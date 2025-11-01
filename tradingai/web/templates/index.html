@@ -494,14 +494,65 @@
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 16px;
+            padding: 20px;
             transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
         
         .analysis-item:hover {
             border-color: var(--primary-color);
             background: rgba(102, 126, 234, 0.05);
             transform: translateX(4px);
+        }
+        
+        .analysis-reason {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .reason-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 8px 0;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+        
+        .reason-header:hover {
+            color: var(--primary-color);
+        }
+        
+        .reason-header i.reason-toggle {
+            font-size: 0.8em;
+            transition: transform 0.3s ease;
+        }
+        
+        .reason-header.expanded i.reason-toggle {
+            transform: rotate(180deg);
+        }
+        
+        .reason-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            font-size: 0.85em;
+            color: var(--text-secondary);
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            padding: 0;
+            margin-top: 0;
+        }
+        
+        .reason-content.expanded {
+            max-height: 500px;
+            padding: 12px 0;
+            margin-top: 8px;
         }
         
         .analysis-header {
@@ -619,6 +670,13 @@
         </div>
         
         <div class="navbar-actions">
+            <div class="account-info" id="accountInfo" style="display: flex; align-items: center; gap: 15px; margin-right: 15px;">
+                <div style="text-align: right;">
+                    <div style="font-size: 0.85em; color: rgba(255,255,255,0.7);">账户余额</div>
+                    <div style="font-size: 1.1em; font-weight: bold; color: white;" id="accountBalance">-</div>
+                </div>
+                <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2);"></div>
+            </div>
             <button class="btn btn-primary" onclick="loadData()" title="刷新数据">
                 <i class="fas fa-sync-alt"></i>
                 刷新
@@ -674,6 +732,13 @@
         let allAnalysisData = [];
         let currentFilter = 'all';
         
+        // 切换分析理由展开/收起
+        function toggleReason(header) {
+            const content = header.nextElementSibling;
+            header.classList.toggle('expanded');
+            content.classList.toggle('expanded');
+        }
+        
         // 页面加载完成
         document.addEventListener('DOMContentLoaded', function() {
             loadData();
@@ -708,6 +773,12 @@
                     updateStats(result.data.stats_30d);
                     updateAnalysisList();
                     updateCharts(result.data);
+                    
+                    // 更新账户余额
+                    if (result.data.account_balance !== undefined && result.data.account_balance !== null) {
+                        document.getElementById('accountBalance').textContent = 
+                            parseFloat(result.data.account_balance).toFixed(2) + ' USDT';
+                    }
                     
                     document.getElementById('timestamp').textContent = 
                         `最后更新: ${new Date(result.timestamp).toLocaleString('zh-CN')}`;
@@ -843,23 +914,38 @@
                     </div>
                     <div class="analysis-details">
                         <div class="detail-row">
-                            <span class="detail-label">入场价:</span>
-                            <span class="detail-value">${item.entry_price || '-'}</span>
+                            <span class="detail-label"><i class="fas fa-arrow-up" style="margin-right: 4px;"></i>入场价:</span>
+                            <span class="detail-value">${item.entry_price ? parseFloat(item.entry_price).toFixed(2) : '-'}</span>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label">止损:</span>
-                            <span class="detail-value">${item.stop_loss || '-'}</span>
+                            <span class="detail-label"><i class="fas fa-arrow-down" style="margin-right: 4px; color: var(--danger-color);"></i>止损:</span>
+                            <span class="detail-value" style="color: var(--danger-color);">${item.stop_loss ? parseFloat(item.stop_loss).toFixed(2) : '-'}</span>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label">止盈:</span>
-                            <span class="detail-value">${item.take_profit || '-'}</span>
+                            <span class="detail-label"><i class="fas fa-arrow-up" style="margin-right: 4px; color: var(--success-color);"></i>止盈:</span>
+                            <span class="detail-value" style="color: var(--success-color);">${item.take_profit ? parseFloat(item.take_profit).toFixed(2) : '-'}</span>
                         </div>
                         <div class="detail-row">
-                            <span class="detail-label">信心度:</span>
-                            <span class="detail-value">${((item.confidence || 0) * 100).toFixed(0)}%</span>
+                            <span class="detail-label"><i class="fas fa-chart-line" style="margin-right: 4px;"></i>信心度:</span>
+                            <span class="detail-value">
+                                ${((item.confidence || 0) * 100).toFixed(0)}%
+                                <span style="font-size: 0.8em; margin-left: 8px; color: ${(item.confidence || 0) >= 0.6 ? 'var(--success-color)' : (item.confidence || 0) >= 0.4 ? 'var(--warning-color)' : 'var(--danger-color)'};">
+                                    ${(item.confidence || 0) >= 0.6 ? '高' : (item.confidence || 0) >= 0.4 ? '中' : '低'}
+                                </span>
+                            </span>
                         </div>
                     </div>
-                    ${item.reason ? `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color); font-size: 0.85em; color: var(--text-secondary);">${item.reason.substring(0, 100)}...</div>` : ''}
+                    ${item.reason ? `
+                        <div class="analysis-reason">
+                            <div class="reason-header" onclick="toggleReason(this)">
+                                <span><i class="fas fa-comment-dots"></i> 完整分析</span>
+                                <i class="fas fa-chevron-down reason-toggle"></i>
+                            </div>
+                            <div class="reason-content">
+                                ${item.reason.replace(/\n/g, '<br>').replace(/```json/g, '<pre style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; overflow-x: auto;"><code>').replace(/```/g, '</code></pre>').replace(/<think>/g, '').replace(/<\/redacted_reasoning>/g, '')}
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
             `).join('');
         }

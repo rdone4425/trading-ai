@@ -641,6 +641,23 @@ async def main():
         logger.info("="*60)
         logger.info("")
         
+        # 先初始化平台（用于Web服务器获取真实余额）
+        platform = None
+        if config.TRADING_ENVIRONMENT != "observe":
+            try:
+                from tradingai.exchange.factory import PlatformFactory
+                platform = PlatformFactory.create(
+                    exchange_name=config.EXCHANGE_NAME,
+                    api_key=config.BINANCE_API_KEY,
+                    api_secret=config.BINANCE_API_SECRET,
+                    testnet=config.TESTNET
+                )
+                await platform.connect()
+                logger.info("   ✅ 交易平台已连接（用于Web余额显示）")
+            except Exception as e:
+                logger.warning(f"   ⚠️  交易平台连接失败: {e}")
+                platform = None
+        
         # 启动Web监控服务器（后台运行）
         if config.WEB_ENABLED:
             try:
@@ -648,7 +665,7 @@ async def main():
                 import os
                 # 确保使用正确的data目录路径
                 data_dir = os.path.join(os.path.dirname(__file__), "data")
-                web_server = WebServer(host="0.0.0.0", port=config.WEB_PORT, data_dir=data_dir)
+                web_server = WebServer(host="0.0.0.0", port=config.WEB_PORT, data_dir=data_dir, platform=platform)
                 await web_server.run_async()
                 logger.info("")
             except Exception as e:
@@ -679,16 +696,17 @@ async def main():
         indicator_engine.config = indicator_config
         logger.info(f"   指标: {', '.join(indicator_config.keys())}")
         
-        # 连接交易平台（用于获取账户余额）
-        from tradingai.exchange.factory import PlatformFactory
-        platform = PlatformFactory.create(
-            exchange_name=config.EXCHANGE_NAME,
-            api_key=config.BINANCE_API_KEY,
-            api_secret=config.BINANCE_API_SECRET,
-            testnet=config.TESTNET
-        )
-        await platform.connect()
-        logger.info("   ✅ 交易平台已连接")
+        # 如果之前没有连接平台（observe模式下），现在连接用于扫描
+        if platform is None:
+            from tradingai.exchange.factory import PlatformFactory
+            platform = PlatformFactory.create(
+                exchange_name=config.EXCHANGE_NAME,
+                api_key=config.BINANCE_API_KEY,
+                api_secret=config.BINANCE_API_SECRET,
+                testnet=config.TESTNET
+            )
+            await platform.connect()
+            logger.info("   ✅ 交易平台已连接")
         
         # 初始化 AI 分析器（如果启用）
         analyzer = None

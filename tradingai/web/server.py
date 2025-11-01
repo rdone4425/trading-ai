@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class WebServer:
     """Web监控服务器"""
     
-    def __init__(self, host: str = "0.0.0.0", port: int = 8080, data_dir: str = "data"):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8080, data_dir: str = "data", platform=None):
         """
         初始化Web服务器
         
@@ -29,10 +29,12 @@ class WebServer:
             host: 监听地址
             port: 监听端口
             data_dir: 数据目录
+            platform: 交易平台实例（用于获取真实余额）
         """
         self.host = host
         self.port = port
         self.data_dir = data_dir
+        self.platform = platform
         self.stats = TradingStats(data_dir)
         
         # 创建Flask应用
@@ -109,6 +111,33 @@ class WebServer:
             """获取仪表板数据"""
             try:
                 data = self.stats.get_dashboard_data()
+                
+                # 获取真实账户余额（优先从交易所获取）
+                account_balance = None
+                if self.platform:
+                    try:
+                        import asyncio
+                        # 尝试从交易所获取真实余额
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        balance = loop.run_until_complete(self.platform.get_balance())
+                        if balance and balance > 0:
+                            account_balance = balance
+                        loop.close()
+                    except Exception as e:
+                        logger.debug(f"从交易所获取余额失败: {e}")
+                
+                # 如果获取失败，使用配置值
+                if account_balance is None:
+                    try:
+                        from tradingai import config
+                        account_balance = getattr(config, 'ACCOUNT_BALANCE', None)
+                    except:
+                        pass
+                
+                # 添加到返回数据中
+                data['account_balance'] = account_balance
+                
                 return jsonify({
                     'success': True,
                     'data': data,
@@ -153,6 +182,47 @@ class WebServer:
                 return jsonify({
                     'success': False,
                     'error': str(e)
+                }), 500
+        
+        @self.app.route('/api/balance')
+        def get_balance():
+            """获取账户余额（真实余额）"""
+            try:
+                balance = None
+                
+                # 优先从交易所获取真实余额
+                if self.platform:
+                    try:
+                        import asyncio
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        balance = loop.run_until_complete(self.platform.get_balance())
+                        loop.close()
+                        
+                        if balance and balance > 0:
+                            return jsonify({
+                                'success': True,
+                                'balance': balance,
+                                'source': 'exchange'
+                            })
+                    except Exception as e:
+                        logger.debug(f"从交易所获取余额失败: {e}")
+                
+                # 如果获取失败，使用配置值
+                from tradingai import config
+                balance = getattr(config, 'ACCOUNT_BALANCE', 0)
+                
+                return jsonify({
+                    'success': True,
+                    'balance': balance,
+                    'source': 'config'
+                })
+            except Exception as e:
+                logger.error(f"获取账户余额失败: {e}", exc_info=True)
+                return jsonify({
+                    'success': False,
+                    'error': str(e),
+                    'balance': 0
                 }), 500
         
         @self.app.route('/health')

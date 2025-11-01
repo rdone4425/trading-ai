@@ -77,40 +77,97 @@ class BinanceClient:
                 symbols.append(item["symbol"])
         return symbols[:limit]
     
-    async def get_klines(self, symbol: str, interval: str = "1h", limit: int = 100, include_current: bool = False) -> List[Dict]:
-        """获取K线数据"""
-        params = {
-            "symbol": symbol,
-            "interval": interval,
-            "limit": limit
-        }
+    async def get_klines(self, symbol: str, interval: str = "1h", limit: int = 100, include_current: bool = False, start_time: int = None, end_time: int = None) -> List[Dict]:
+        """
+        获取K线数据（支持批量获取超过1000根）
         
-        data = await self._request("GET", "/fapi/v1/klines", params)
+        Args:
+            symbol: 交易对
+            interval: K线周期
+            limit: 需要获取的K线数量（如果>1000会自动分批获取）
+            include_current: 是否包含当前进行中的K线
+            start_time: 开始时间（毫秒时间戳，可选）
+            end_time: 结束时间（毫秒时间戳，可选）
         
-        klines = []
-        current_time = int(time.time() * 1000)
+        Returns:
+            K线数据列表（按时间正序排列）
+        """
+        # 币安API单次最多返回1000根K线
+        MAX_PER_REQUEST = 1000
         
-        for i, k in enumerate(data):
-            close_time = int(k[6])  # 收盘时间
-            # 判断K线是否完成：收盘时间 < 当前时间
-            is_closed = close_time < current_time
+        all_klines = []
+        remaining = limit
+        current_end_time = end_time or int(time.time() * 1000)
+        
+        # 如果limit > 1000，需要分批获取
+        while remaining > 0:
+            # 本次请求的数量
+            request_limit = min(remaining, MAX_PER_REQUEST)
             
-            klines.append({
-                "timestamp": datetime.fromtimestamp(k[0] / 1000),
-                "open": float(k[1]),
-                "high": float(k[2]),
-                "low": float(k[3]),
-                "close": float(k[4]),
-                "volume": float(k[7]),
-                "is_closed": is_closed
-            })
+            params = {
+                "symbol": symbol,
+                "interval": interval,
+                "limit": request_limit
+            }
+            
+            # 如果指定了结束时间，添加endTime参数
+            if current_end_time:
+                params["endTime"] = current_end_time
+            
+            try:
+                data = await self._request("GET", "/fapi/v1/klines", params)
+                
+                if not data:
+                    break
+                
+                current_time = int(time.time() * 1000)
+                batch_klines = []
+                
+                for k in data:
+                    close_time = int(k[6])  # 收盘时间
+                    is_closed = close_time < current_time
+                    
+                    kline = {
+                        "timestamp": datetime.fromtimestamp(k[0] / 1000),
+                        "open": float(k[1]),
+                        "high": float(k[2]),
+                        "low": float(k[3]),
+                        "close": float(k[4]),
+                        "volume": float(k[7]),
+                        "is_closed": is_closed
+                    }
+                    batch_klines.append(kline)
+                
+                # 将这批数据添加到总列表（逆序添加，因为API返回的是从新到旧）
+                all_klines = batch_klines + all_klines
+                
+                # 如果返回的数据少于请求的数量，说明没有更多历史数据了
+                if len(data) < request_limit:
+                    break
+                
+                # 更新下一次请求的结束时间（使用最早的那根K线的开盘时间-1）
+                if batch_klines:
+                    earliest_timestamp = batch_klines[0]["timestamp"]
+                    current_end_time = int(earliest_timestamp.timestamp() * 1000) - 1
+                
+                remaining -= len(data)
+                
+                # 避免过于频繁的请求
+                if remaining > 0:
+                    await asyncio.sleep(0.1)
+                    
+            except Exception as e:
+                from ...logger import get_logger
+                logger = get_logger("exchange.client.binance")
+                logger.error(f"获取K线数据失败 {symbol}: {e}")
+                break
         
         # 如果不需要当前K线，只返回已完成的
-        if not include_current and klines:
-            # 通常最后一根是当前K线，保留已完成的K线
-            klines = [k for k in klines if k['is_closed']]
+        if not include_current and all_klines:
+            all_klines = [k for k in all_klines if k['is_closed']]
         
-        return klines
+        # 限制返回数量
+        return all_klines[:limit] if limit else all_klines
     
     async def get_balance(self) -> Optional[float]:
         """获取账户余额"""
