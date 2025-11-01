@@ -7,8 +7,8 @@
 ### 新手入门
 - 📖 **[项目主页](../README.md)** - 项目概述和快速开始
 - 🔧 **[安装指南](INSTALL.md)** - 详细的安装步骤和依赖配置
-- 💰 **[交易功能](../TRADING.md)** - 完整的交易功能使用指南
-- 🐳 **[Docker部署](../DOCKER.md)** - 容器化部署指南
+- 💰 **[交易功能](TRADING.md)** - 完整的交易功能使用指南
+- 🐳 **[Docker部署](DOCKER.md)** - 容器化部署指南
 
 ### 功能使用
 - 🔄 **[自动扫描](AUTO_SCAN.md)** - 自动循环扫描和K线对齐
@@ -26,15 +26,15 @@
 ```
 trading-ai/
 ├── README.md                 # 项目主页
-├── TRADING.md               # 交易功能完整指南
-├── DOCKER.md                # Docker部署指南
 ├── install.sh               # 一键安装脚本
 ├── main.py                  # 主程序入口
 ├── requirements.txt         # Python依赖
 ├── env.example             # 配置文件模板
 │
-├── docs/                   # 📚 文档目录
+├── docs/                   # 📚 文档目录（统一管理）
 │   ├── README.md          # 文档索引（本文件）
+│   ├── TRADING.md         # 💰 交易功能完整指南
+│   ├── DOCKER.md          # 🐳 Docker部署指南
 │   ├── INSTALL.md         # 安装指南
 │   ├── AUTO_SCAN.md       # 自动扫描功能
 │   ├── CONCURRENT.md      # 并发分析配置
@@ -70,7 +70,7 @@ trading-ai/
 4. ▶️ 运行 `python main.py` 开始使用
 
 ### 我想使用交易功能
-1. 💰 阅读 [交易功能指南](../TRADING.md)
+1. 💰 阅读 [交易功能指南](TRADING.md)
 2. ⚠️ 先在**观察模式**测试（无需API）
 3. 🧪 在**测试网**验证策略（虚拟资金）
 4. 💵 谨慎开启**实盘交易**（真实资金）
@@ -78,7 +78,7 @@ trading-ai/
 ### 我想自动化运行
 1. 🔄 启用 [自动扫描功能](AUTO_SCAN.md)
 2. ⏰ 配置K线周期对齐
-3. 🐳 可选：使用 [Docker部署](../DOCKER.md)
+3. 🐳 可选：使用 [Docker部署](DOCKER.md)
 4. 📊 监控日志和分析结果
 
 ### 我想提升性能
@@ -141,11 +141,11 @@ A: 按顺序测试：
 2. **测试网** (`TRADING_ENVIRONMENT=testnet`) - 虚拟资金
 3. **实盘** (`TRADING_ENVIRONMENT=mainnet`) - 真实资金（⚠️谨慎）
 
-详见 [交易功能文档](../TRADING.md)。
+详见 [交易功能文档](TRADING.md)。
 
 ### Q: 如何部署到服务器？
 A: 推荐使用Docker：
-1. 查看 [Docker部署文档](../DOCKER.md)
+1. 查看 [Docker部署文档](DOCKER.md)
 2. 使用 `install.sh` 脚本自动安装
 3. 配置自动重启和监控
 
@@ -174,12 +174,12 @@ A: 系统自动清理：
 | 链接 | 说明 |
 |------|------|
 | [项目主页](../README.md) | 快速开始和系统概述 |
-| [交易指南](../TRADING.md) | 完整的交易功能说明 |
-| [Docker部署](../DOCKER.md) | 容器化部署 |
+| [交易指南](TRADING.md) | 完整的交易功能说明 |
+| [Docker部署](DOCKER.md) | 容器化部署 |
 | [安装指南](INSTALL.md) | 依赖安装步骤 |
 | [示例代码](../examples/README.md) | 功能示例 |
 
 ---
 
 **提示**: 建议新用户按照以下顺序阅读文档：
-1. [项目主页](../README.md) → 2. [安装指南](INSTALL.md) → 3. [自动扫描](AUTO_SCAN.md) → 4. [交易指南](../TRADING.md)
+1. [项目主页](../README.md) → 2. [安装指南](INSTALL.md) → 3. [自动扫描](AUTO_SCAN.md) → 4. [交易指南](TRADING.md)
