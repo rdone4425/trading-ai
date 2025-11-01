@@ -82,6 +82,22 @@ class Trader:
             action = analysis_result.get('action')
             confidence = analysis_result.get('confidence', 0)
             
+            # 0. 验证交易对
+            if not symbol or not isinstance(symbol, str):
+                return {
+                    "success": False,
+                    "message": f"交易对无效: {symbol}",
+                    "orders": {}
+                }
+            
+            # 验证交易对格式（必须包含USDT等）
+            if not any(quote in symbol.upper() for quote in ['USDT', 'BUSD', 'USD']):
+                return {
+                    "success": False,
+                    "message": f"交易对格式无效: {symbol}（必须是USDT/BUSD等合约）",
+                    "orders": {}
+                }
+            
             # 1. 检查是否观望
             if action == '观望' or confidence < config.AI_CONFIDENCE_THRESHOLD:
                 return {
@@ -143,12 +159,69 @@ class Trader:
             leverage = analysis_result.get('leverage', config.DEFAULT_LEVERAGE)
             position_size = analysis_result.get('position_size')
             
+            # 3.1 检查价格是否存在且有效
             if not all([entry_price, stop_loss, take_profit]):
                 return {
                     "success": False,
                     "message": "缺少必要的交易参数（入场价、止损价、止盈价）",
                     "orders": {}
                 }
+            
+            # 3.2 转换为浮点数并验证
+            try:
+                entry_price = float(entry_price)
+                stop_loss = float(stop_loss)
+                take_profit = float(take_profit)
+                leverage = int(leverage)
+            except (ValueError, TypeError) as e:
+                return {
+                    "success": False,
+                    "message": f"交易参数类型错误: {e}",
+                    "orders": {}
+                }
+            
+            # 3.3 严格验证价格有效性（必须大于0）
+            if entry_price <= 0 or stop_loss <= 0 or take_profit <= 0:
+                return {
+                    "success": False,
+                    "message": f"价格无效（必须>0）: 入场={entry_price}, 止损={stop_loss}, 止盈={take_profit}",
+                    "orders": {}
+                }
+            
+            # 3.4 验证价格的合理性
+            if action == '做多':
+                # 做多：止损应该低于入场价，止盈应该高于入场价
+                if stop_loss >= entry_price:
+                    return {
+                        "success": False,
+                        "message": f"做多止损价格不合理: 止损({stop_loss}) >= 入场({entry_price})",
+                        "orders": {}
+                    }
+                if take_profit <= entry_price:
+                    return {
+                        "success": False,
+                        "message": f"做多止盈价格不合理: 止盈({take_profit}) <= 入场({entry_price})",
+                        "orders": {}
+                    }
+            elif action == '做空':
+                # 做空：止损应该高于入场价，止盈应该低于入场价
+                if stop_loss <= entry_price:
+                    return {
+                        "success": False,
+                        "message": f"做空止损价格不合理: 止损({stop_loss}) <= 入场({entry_price})",
+                        "orders": {}
+                    }
+                if take_profit >= entry_price:
+                    return {
+                        "success": False,
+                        "message": f"做空止盈价格不合理: 止盈({take_profit}) >= 入场({entry_price})",
+                        "orders": {}
+                    }
+            
+            # 3.5 验证杠杆倍数
+            if leverage < 1 or leverage > 125:
+                logger.warning(f"杠杆倍数异常: {leverage}，使用默认值: {config.DEFAULT_LEVERAGE}")
+                leverage = config.DEFAULT_LEVERAGE
             
             # 4. 设置杠杆和逐仓模式
             if auto_set_leverage:
@@ -175,38 +248,135 @@ class Trader:
             account_balance = await self._get_account_balance()
             
             # 7. 计算仓位大小（如果未提供）
-            if not position_size:
+            if not position_size or position_size <= 0:
                 position_size = self._calculate_position_size(
                     entry_price, stop_loss, leverage, account_balance
                 )
+            else:
+                # 如果提供了仓位大小，转换并验证
+                try:
+                    position_size = float(position_size)
+                except (ValueError, TypeError):
+                    return {
+                        "success": False,
+                        "message": f"仓位大小格式错误: {position_size}",
+                        "orders": {}
+                    }
             
+            # 7.1 验证仓位大小
             if position_size <= 0:
                 return {
                     "success": False,
-                    "message": f"计算出的仓位大小为0，无法执行交易",
+                    "message": f"仓位大小无效（必须>0）: {position_size}",
                     "orders": {}
                 }
             
-            # 8. 执行入场订单（市价单）
-            entry_order = await self.platform.place_futures_order(
-                symbol=symbol,
-                side=order_side,
-                position_side=position_side,
-                quantity=position_size,
-                order_type="MARKET"
-            )
+            # 7.2 验证仓位不超过最大限制
+            position_value = position_size * entry_price
+            max_position_value = account_balance * config.MAX_POSITION_SIZE
+            if position_value > max_position_value:
+                logger.warning(f"⚠️  仓位过大: {position_value:.2f} > 最大允许 {max_position_value:.2f}，自动调整")
+                position_size = (max_position_value / entry_price) * 0.99  # 留一点余地
+                logger.info(f"调整后仓位: {position_size:.6f}")
             
-            logger.info(f"✅ 入场订单已提交: {symbol} {action} {position_size} @ 市价 (余额: {account_balance:.2f} USDT)")
+            # 7.3 验证保证金是否足够
+            margin_required = (position_size * entry_price) / leverage
+            if margin_required > account_balance * 0.95:  # 留5%缓冲
+                return {
+                    "success": False,
+                    "message": f"保证金不足: 需要{margin_required:.2f} USDT, 可用{account_balance:.2f} USDT",
+                    "orders": {}
+                }
+            
+            # 7.4 记录交易详情（用于日志）
+            logger.info(f"📊 交易详情:")
+            logger.info(f"   交易对: {symbol}")
+            logger.info(f"   方向: {action}")
+            logger.info(f"   入场价: {entry_price:.8f}")
+            logger.info(f"   止损价: {stop_loss:.8f}")
+            logger.info(f"   止盈价: {take_profit:.8f}")
+            logger.info(f"   仓位: {position_size:.6f} 币")
+            logger.info(f"   杠杆: {leverage}x")
+            logger.info(f"   保证金: {margin_required:.2f} USDT")
+            logger.info(f"   仓位价值: {position_value:.2f} USDT")
+            
+            # 计算潜在盈亏
+            if action == '做多':
+                potential_profit = (take_profit - entry_price) * position_size
+                potential_loss = (entry_price - stop_loss) * position_size
+            else:  # 做空
+                potential_profit = (entry_price - take_profit) * position_size
+                potential_loss = (stop_loss - entry_price) * position_size
+            
+            risk_reward = potential_profit / potential_loss if potential_loss > 0 else 0
+            logger.info(f"   潜在盈利: +{potential_profit:.2f} USDT")
+            logger.info(f"   潜在亏损: -{potential_loss:.2f} USDT")
+            logger.info(f"   盈亏比: 1:{risk_reward:.2f}")
+            
+            # 7.5 最终确认：如果风险过大，拒绝交易
+            risk_percent = (potential_loss / account_balance) * 100
+            if risk_percent > config.MAX_LOSS_PER_TRADE * 100:
+                return {
+                    "success": False,
+                    "message": f"风险过大: {risk_percent:.2f}% > 最大允许 {config.MAX_LOSS_PER_TRADE*100:.2f}%",
+                    "orders": {}
+                }
+            
+            # 8. 最后确认：记录即将执行的交易（用于审计）
+            logger.info(f"🚀 准备执行交易:")
+            logger.info(f"   即将开仓: {symbol} {action}")
+            logger.info(f"   置信度: {confidence:.1%}")
+            logger.info(f"   风险: {risk_percent:.2f}% 账户")
+            
+            # 8.1 执行入场订单（市价单）
+            try:
+                entry_order = await self.platform.place_futures_order(
+                    symbol=symbol,
+                    side=order_side,
+                    position_side=position_side,
+                    quantity=position_size,
+                    order_type="MARKET"
+                )
+            except Exception as e:
+                logger.error(f"❌ 入场订单失败: {e}")
+                return {
+                    "success": False,
+                    "message": f"入场订单失败: {str(e)}",
+                    "orders": {}
+                }
+            
+            logger.info(f"✅ 入场订单已提交: {symbol} {action} {position_size:.6f} @ 市价 (余额: {account_balance:.2f} USDT)")
+            logger.info(f"   订单ID: {entry_order.get('order_id', 'N/A')}")
             
             # 9. 设置止损订单（必须）
-            stop_loss_order = await self._place_stop_loss_order(
-                symbol, position_side, stop_loss
-            )
+            try:
+                stop_loss_order = await self._place_stop_loss_order(
+                    symbol, position_side, stop_loss
+                )
+            except Exception as e:
+                logger.error(f"❌ 止损订单失败: {e}")
+                # 止损订单失败是严重问题，应该立即平仓
+                logger.warning(f"⚠️  止损设置失败，出于安全考虑，将平仓")
+                try:
+                    await self.close_position(symbol, position_side)
+                except Exception as close_error:
+                    logger.error(f"❌ 紧急平仓也失败: {close_error}")
+                return {
+                    "success": False,
+                    "message": f"止损订单失败: {str(e)}，已尝试平仓",
+                    "orders": {"entry": entry_order}
+                }
             
             # 10. 设置止盈订单（必须）
-            take_profit_order = await self._place_take_profit_order(
-                symbol, position_side, take_profit
-            )
+            try:
+                take_profit_order = await self._place_take_profit_order(
+                    symbol, position_side, take_profit
+                )
+            except Exception as e:
+                logger.error(f"❌ 止盈订单失败: {e}")
+                # 止盈失败不那么严重，但也要记录
+                logger.warning(f"⚠️  止盈设置失败，持仓仍有止损保护")
+                take_profit_order = {"error": str(e)}
             
             # 11. 记录持仓（在执行成功后立即记录，防止重复开单）
             await self._update_active_position(symbol, position_side, entry_order)
