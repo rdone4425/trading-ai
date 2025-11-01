@@ -240,13 +240,13 @@ class MarketAnalyzer:
             result = self._parse_analysis_response(response, symbol, klines)
             
             # 6. 风险管理计算（如果启用，基于扫描器传递的指标）
-            # 即使建议是"观望"，如果价格字段无效，也尝试计算（提供参考值）
+            # 为所有建议（包括观望）计算风险指标和杠杆
             if self.enable_risk_calculation:
-                if result['action'] != "观望":
-                    # 非观望建议：进行完整的风险计算
-                    result = await self._enhance_with_risk_management(result, indicators)
-                elif result.get('entry_price', 0) <= 0 or result.get('stop_loss', 0) <= 0 or result.get('take_profit', 0) <= 0:
-                    # 观望建议但价格字段无效：至少提供当前价格作为参考
+                # 为所有建议进行风险计算
+                result = await self._enhance_with_risk_management(result, indicators)
+                
+                # 如果是观望建议但没有价格，使用当前价格作为参考
+                if result['action'] == "观望" and (result.get('entry_price', 0) <= 0 or result.get('stop_loss', 0) <= 0 or result.get('take_profit', 0) <= 0):
                     if result.get('entry_price', 0) <= 0 and klines:
                         current_price = klines[-1].get('close', 0)
                         if current_price > 0:
