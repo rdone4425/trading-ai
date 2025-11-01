@@ -727,13 +727,29 @@
         
         <!-- 内容面板 -->
         <div class="content-panel">
-            <div class="panel-header">
-                <h2 class="panel-title">
-                    <i class="fas fa-chart-area"></i>
-                    账户总金额曲线
-                </h2>
+            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <h2 class="panel-title">
+                        <i class="fas fa-chart-area"></i>
+                        账户总金额曲线
+                    </h2>
+                </div>
+                <div id="chartStats" style="display: flex; gap: 20px; font-size: 0.9em;">
+                    <div style="text-align: center;">
+                        <div style="color: var(--text-secondary); font-size: 0.85em;">当前余额</div>
+                        <div id="currentBalance" style="font-weight: bold; color: var(--primary-color);">-</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="color: var(--text-secondary); font-size: 0.85em;">累计收益</div>
+                        <div id="totalProfit" style="font-weight: bold;">-</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="color: var(--text-secondary); font-size: 0.85em;">收益率</div>
+                        <div id="totalROI" style="font-weight: bold;">-</div>
+                    </div>
+                </div>
             </div>
-            <div id="profitChart" class="chart-container"></div>
+            <div id="profitChart" class="chart-container" style="min-height: 350px;"></div>
         </div>
         
         <div class="content-panel">
@@ -1314,7 +1330,17 @@
         // 更新图表
         function updateCharts(data) {
             if (!profitChart) {
-                profitChart = echarts.init(document.getElementById('profitChart'));
+                profitChart = echarts.init(document.getElementById('profitChart'), null, {
+                    renderer: 'canvas',
+                    useDirtyRect: true
+                });
+                
+                // 响应式调整
+                window.addEventListener('resize', function() {
+                    if (profitChart) {
+                        profitChart.resize();
+                    }
+                });
             }
             
             const trades = data.all_trades || [];
@@ -1325,6 +1351,8 @@
             // 计算每个时间点的总金额（初始余额 + 累计收益）
             let cumulative = 0;
             let balanceData = [];
+            let lastBalance = initialBalance;
+            let totalProfit = 0;
             
             if (trades.length === 0) {
                 // 如果没有交易记录，显示初始余额（显示最近7天的数据点）
@@ -1334,114 +1362,297 @@
                     date.setDate(date.getDate() - i);
                     balanceData.push({
                         time: date.toLocaleDateString('zh-CN', {month: '2-digit', day: '2-digit'}),
+                        dateStr: date.toISOString().split('T')[0],
                         balance: initialBalance,
                         profit: 0
                     });
                 }
             } else {
                 // 有交易记录，计算累计总金额
-                balanceData = trades.map((trade, index) => {
+                // 按时间排序
+                const sortedTrades = [...trades].sort((a, b) => {
+                    const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                    const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                    return timeA - timeB;
+                });
+                
+                balanceData = sortedTrades.map((trade, index) => {
                     cumulative += trade.profit || 0;
                     const totalBalance = initialBalance + cumulative;
+                    lastBalance = totalBalance;
+                    totalProfit = cumulative;
+                    
+                    const tradeDate = trade.timestamp ? new Date(trade.timestamp) : new Date();
                     return {
-                        time: trade.timestamp ? 
-                            new Date(trade.timestamp).toLocaleDateString('zh-CN', {month: '2-digit', day: '2-digit'}) : 
-                            `#${index+1}`,
+                        time: tradeDate.toLocaleDateString('zh-CN', {month: '2-digit', day: '2-digit'}),
+                        dateStr: tradeDate.toISOString().split('T')[0],
                         balance: totalBalance,
-                        profit: cumulative
+                        profit: cumulative,
+                        tradeIndex: index + 1
                     };
                 });
             }
+            
+            // 更新统计信息
+            const currentBalanceEl = document.getElementById('currentBalance');
+            const totalProfitEl = document.getElementById('totalProfit');
+            const totalROIEl = document.getElementById('totalROI');
+            
+            if (currentBalanceEl) {
+                currentBalanceEl.textContent = formatPrice(lastBalance) + ' USDT';
+                currentBalanceEl.style.color = lastBalance >= initialBalance ? 'var(--success-color)' : 'var(--danger-color)';
+            }
+            
+            if (totalProfitEl) {
+                const profitText = (totalProfit >= 0 ? '+' : '') + formatPrice(totalProfit) + ' USDT';
+                totalProfitEl.textContent = profitText;
+                totalProfitEl.style.color = totalProfit >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
+            }
+            
+            if (totalROIEl) {
+                const roi = initialBalance > 0 ? ((totalProfit / initialBalance) * 100) : 0;
+                const roiText = (roi >= 0 ? '+' : '') + roi.toFixed(2) + '%';
+                totalROIEl.textContent = roiText;
+                totalROIEl.style.color = roi >= 0 ? 'var(--success-color)' : 'var(--danger-color)';
+            }
+            
+            // 计算颜色渐变（基于收益情况）
+            const finalProfit = balanceData.length > 0 ? balanceData[balanceData.length - 1].profit : 0;
+            const isPositive = finalProfit >= 0;
+            const lineColor = isPositive ? '#10b981' : '#ef4444';
+            const areaColorStart = isPositive ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+            const areaColorEnd = isPositive ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)';
             
             profitChart.setOption({
                 backgroundColor: 'transparent',
                 tooltip: {
                     trigger: 'axis',
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    borderColor: '#667eea',
-                    textStyle: { color: '#e0e0e0' },
+                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    borderColor: lineColor,
+                    borderWidth: 2,
+                    borderRadius: 8,
+                    padding: [12, 16],
+                    textStyle: { 
+                        color: '#e0e0e0',
+                        fontSize: 13
+                    },
+                    axisPointer: {
+                        type: 'cross',
+                        crossStyle: {
+                            color: lineColor,
+                            width: 1,
+                            type: 'dashed'
+                        },
+                        label: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            borderColor: lineColor,
+                            color: '#fff'
+                        }
+                    },
                     formatter: function(params) {
+                        if (!params || params.length === 0) return '';
                         const param = params[0];
                         const balance = parseFloat(param.value);
                         const profit = param.data.profit || 0;
                         const profitPercent = initialBalance > 0 ? ((profit / initialBalance) * 100).toFixed(2) : '0.00';
-                        return `${param.name}<br/>` +
-                               `总金额: <span style="color: #667eea; font-weight: bold;">${balance.toFixed(2)} USDT</span><br/>` +
-                               `累计收益: <span style="color: ${profit >= 0 ? '#10b981' : '#ef4444'}; font-weight: bold;">${profit >= 0 ? '+' : ''}${profit.toFixed(2)} USDT</span><br/>` +
-                               `收益率: <span style="color: ${profit >= 0 ? '#10b981' : '#ef4444'};">${profit >= 0 ? '+' : ''}${profitPercent}%</span>`;
+                        const dateStr = param.data.dateStr || param.name;
+                        return `<div style="line-height: 1.8;">
+                            <div style="margin-bottom: 8px; font-weight: bold; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 6px;">
+                                ${param.data.dateStr ? new Date(dateStr).toLocaleDateString('zh-CN', {year: 'numeric', month: 'long', day: 'numeric'}) : param.name}
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                                <span style="color: #9ca3af;">总金额:</span>
+                                <span style="color: ${lineColor}; font-weight: bold; font-size: 14px;">${formatPrice(balance)} USDT</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                                <span style="color: #9ca3af;">累计收益:</span>
+                                <span style="color: ${profit >= 0 ? '#10b981' : '#ef4444'}; font-weight: bold;">${profit >= 0 ? '+' : ''}${formatPrice(profit)} USDT</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                                <span style="color: #9ca3af;">收益率:</span>
+                                <span style="color: ${profit >= 0 ? '#10b981' : '#ef4444'}; font-weight: bold;">${profit >= 0 ? '+' : ''}${profitPercent}%</span>
+                            </div>
+                            ${param.data.tradeIndex ? `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); color: #9ca3af; font-size: 0.9em;">交易 #${param.data.tradeIndex}</div>` : ''}
+                        </div>`;
                     }
                 },
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        start: Math.max(0, 100 - (balanceData.length > 30 ? 30 : balanceData.length) * (100 / balanceData.length || 1)),
+                        end: 100
+                    },
+                    {
+                        type: 'slider',
+                        show: balanceData.length > 7,
+                        start: Math.max(0, 100 - (balanceData.length > 30 ? 30 : balanceData.length) * (100 / balanceData.length || 1)),
+                        end: 100,
+                        height: 20,
+                        bottom: 10,
+                        handleIcon: 'M10.7,11.9v-1.3H9.3v1.3c-4.9,0.3-8.8,4.4-8.8,9.4c0,5,3.9,9.1,8.8,9.4v1.3h1.3v-1.3c4.9-0.3,8.8-4.4,8.8-9.4C19.5,16.3,15.6,12.2,10.7,11.9z M13.3,24.4H6.7V23.1h6.6V24.4z M13.3,19.6H6.7v-1.4h6.6V19.6z',
+                        handleSize: '80%',
+                        handleStyle: {
+                            color: lineColor,
+                            shadowBlur: 3,
+                            shadowColor: 'rgba(0, 0, 0, 0.6)',
+                            shadowOffsetX: 2,
+                            shadowOffsetY: 2
+                        },
+                        textStyle: { color: '#9ca3af' },
+                        borderColor: '#4b5563'
+                    }
+                ],
                 grid: {
                     left: '3%',
                     right: '4%',
-                    bottom: '3%',
+                    bottom: balanceData.length > 7 ? '15%' : '10%',
+                    top: '10%',
                     containLabel: true
                 },
                 xAxis: {
                     type: 'category',
                     data: balanceData.map(d => d.time),
-                    axisLine: { lineStyle: { color: '#4b5563' } },
-                    axisLabel: { color: '#9ca3af' }
+                    boundaryGap: false,
+                    axisLine: { 
+                        lineStyle: { color: '#4b5563', width: 1 }
+                    },
+                    axisTick: { show: false },
+                    axisLabel: { 
+                        color: '#9ca3af',
+                        fontSize: 11,
+                        margin: 8
+                    },
+                    splitLine: { show: false }
                 },
                 yAxis: {
                     type: 'value',
-                    axisLine: { lineStyle: { color: '#4b5563' } },
+                    scale: false,
+                    axisLine: { 
+                        show: true,
+                        lineStyle: { color: '#4b5563', width: 1 }
+                    },
+                    axisTick: { show: false },
                     axisLabel: { 
                         color: '#9ca3af',
-                        formatter: '{value} USDT'
+                        fontSize: 11,
+                        formatter: function(value) {
+                            if (value >= 1000) {
+                                return (value / 1000).toFixed(1) + 'k';
+                            }
+                            return value.toFixed(0);
+                        }
                     },
-                    splitLine: { lineStyle: { color: '#374151', type: 'dashed' } }
+                    splitLine: { 
+                        show: true,
+                        lineStyle: { 
+                            color: '#374151', 
+                            type: 'dashed',
+                            width: 1,
+                            opacity: 0.5
+                        }
+                    }
                 },
                 series: [{
                     name: '账户总金额',
                     type: 'line',
                     data: balanceData.map(d => ({
-                        value: d.balance.toFixed(2),
-                        profit: d.profit
+                        value: parseFloat(d.balance.toFixed(2)),
+                        profit: d.profit,
+                        dateStr: d.dateStr,
+                        tradeIndex: d.tradeIndex
                     })),
                     smooth: true,
+                    symbol: 'circle',
+                    symbolSize: function(value, params) {
+                        // 最后一个点更大，突出显示
+                        return params.dataIndex === balanceData.length - 1 ? 8 : 5;
+                    },
+                    showSymbol: true,
                     itemStyle: { 
-                        color: function(params) {
-                            // 根据当前金额相对于初始余额的变化来显示颜色
-                            const currentBalance = parseFloat(params.value);
-                            return currentBalance >= initialBalance ? '#10b981' : '#ef4444';
-                        }
+                        color: lineColor,
+                        borderColor: '#fff',
+                        borderWidth: 2,
+                        shadowBlur: 4,
+                        shadowColor: lineColor + '40'
                     },
                     areaStyle: {
                         color: {
                             type: 'linear',
                             x: 0, y: 0, x2: 0, y2: 1,
                             colorStops: [
-                                { offset: 0, color: 'rgba(16, 185, 129, 0.3)' }, // 绿色渐变
-                                { offset: 1, color: 'rgba(16, 185, 129, 0.05)' }
+                                { offset: 0, color: areaColorStart },
+                                { offset: 1, color: areaColorEnd }
                             ]
                         }
                     },
                     lineStyle: { 
                         width: 3,
-                        color: function(params) {
-                            const currentBalance = parseFloat(params.value);
-                            return currentBalance >= initialBalance ? '#10b981' : '#ef4444';
+                        color: lineColor,
+                        shadowBlur: 6,
+                        shadowColor: lineColor + '30'
+                    },
+                    emphasis: {
+                        focus: 'series',
+                        itemStyle: {
+                            borderWidth: 3,
+                            shadowBlur: 8,
+                            shadowColor: lineColor + '60'
                         }
                     },
                     markLine: {
                         silent: true,
+                        symbol: 'none',
+                        lineStyle: {
+                            color: '#9ca3af',
+                            type: 'dashed',
+                            width: 2,
+                            opacity: 0.6
+                        },
+                        label: {
+                            show: true,
+                            position: 'end',
+                            formatter: '初始余额: ' + formatPrice(initialBalance) + ' USDT',
+                            color: '#9ca3af',
+                            fontSize: 11,
+                            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                            padding: [4, 8],
+                            borderRadius: 4
+                        },
                         data: [{
                             yAxis: initialBalance,
-                            lineStyle: {
-                                color: '#9ca3af',
-                                type: 'dashed',
-                                width: 1
-                            },
                             label: {
-                                formatter: '初始余额: ' + initialBalance.toFixed(2) + ' USDT',
-                                position: 'right',
-                                color: '#9ca3af'
+                                position: 'end'
                             }
                         }]
-                    }
+                    },
+                    markPoint: balanceData.length > 0 ? {
+                        symbol: 'pin',
+                        symbolSize: 50,
+                        data: [
+                            {
+                                type: 'max',
+                                name: '最高值',
+                                itemStyle: { color: '#10b981' },
+                                label: {
+                                    formatter: '最高\n' + formatPrice(Math.max(...balanceData.map(d => d.balance))) + ' USDT',
+                                    color: '#fff',
+                                    fontSize: 10
+                                }
+                            },
+                            balanceData.length > 1 ? {
+                                type: 'min',
+                                name: '最低值',
+                                itemStyle: { color: '#ef4444' },
+                                label: {
+                                    formatter: '最低\n' + formatPrice(Math.min(...balanceData.map(d => d.balance))) + ' USDT',
+                                    color: '#fff',
+                                    fontSize: 10
+                                }
+                            } : null
+                        ].filter(Boolean)
+                    } : null
                 }]
-            });
+            }, true);
         }
     </script>
 </body>
