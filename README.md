@@ -25,7 +25,25 @@
 
 ## 🚀 快速开始
 
-### 方式一：Docker 部署（推荐）
+### 方式一：自动安装脚本（最简单）
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/rdone4425/trading-ai.git
+cd trading-ai
+
+# 2. 运行自动安装脚本（交互式）
+chmod +x install.sh
+./install.sh
+```
+
+脚本会自动：
+- ✅ 检测并安装 Docker 和 Docker Compose
+- ✅ 交互式配置环境变量
+- ✅ 构建 Docker 镜像
+- ✅ 启动服务
+
+### 方式二：Docker 部署（手动）
 
 ```bash
 # 1. 构建镜像
@@ -44,7 +62,7 @@ docker-compose logs -f
 
 详细说明：[DOCKER.md](./DOCKER.md)
 
-### 方式二：本地安装
+### 方式三：本地安装
 
 #### 1. 安装依赖
 
