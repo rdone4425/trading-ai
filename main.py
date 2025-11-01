@@ -742,11 +742,16 @@ async def main():
         try:
             logger.info("\n🧪 API密钥有效性测试...")
             balance = await platform.get_balance()
-            logger.info(f"   ✅ 余额查询成功: {balance:.2f} USDT")
-            logger.info(f"   📊 这证明了 API 密钥是有效的！")
+            if balance is not None and balance > 0:
+                logger.info(f"   ✅ 余额查询成功: {balance:.2f} USDT")
+                logger.info(f"   📊 这证明了 API 密钥是有效的！")
+            else:
+                logger.warning(f"   ⚠️  余额返回值异常: {balance}")
+                logger.warning(f"   这可能表示 API 密钥有问题或账户余额为 0")
         except Exception as e:
             logger.error(f"   ❌ 余额查询失败: {e}")
             logger.error(f"   这说明 API 密钥可能存在问题，建议检查")
+            logger.debug(f"   详细错误: {repr(e)}", exc_info=True)
         
         # 初始化 AI 分析器（如果启用）
         analyzer = None

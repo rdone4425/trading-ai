@@ -56,8 +56,16 @@ class BinancePlatform(BasePlatform):
         """获取余额"""
         if not self.client:
             raise RuntimeError("未连接到交易所")
-        balance = await self.client.get_balance()
-        return balance if balance else 0.0
+        try:
+            balance = await self.client.get_balance()
+            # 确保返回有效的数字
+            if balance is None:
+                logger.warning("⚠️  客户端返回的余额为 None，使用默认值 0.0")
+                return 0.0
+            return float(balance) if balance else 0.0
+        except Exception as e:
+            logger.error(f"❌ 获取余额失败: {e}")
+            raise
     
     async def place_order(self, symbol: str, side: str, quantity: float, price: float = None) -> Optional[Dict]:
         """下单"""
