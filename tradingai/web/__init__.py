@@ -1,10 +1,13 @@
 """
 Web监控模块
-提供Web界面显示交易数据和统计信息
+提供HTTP接口和Web界面
 """
 
 from .server import WebServer
 from .stats import TradingStats
 
-__all__ = ['WebServer', 'TradingStats']
+__all__ = [
+    'WebServer',
+    'TradingStats',
+]
 
