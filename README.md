@@ -27,35 +27,26 @@
 
 ### 方式一：一键安装脚本（最简单推荐）
 
-**如果你已经有 `install.sh` 脚本：**
-```bash
-./install.sh
-```
-如果当前目录不是项目目录，脚本会自动提示下载。
+**使用方式：**
 
-**首次安装，一条命令完成：**
-```bash
-git clone https://github.com/rdone4425/trading-ai.git && cd trading-ai && chmod +x install.sh && ./install.sh
-```
+1. **如果你已经有 `install.sh` 脚本**（在项目目录中）：
+   ```bash
+   ./install.sh
+   ```
 
-**或者在任意目录运行脚本，它会引导下载：**
-```bash
-# 下载并运行脚本
-curl -fsSL https://raw.githubusercontent.com/rdone4425/trading-ai/main/install.sh -o install.sh
-chmod +x install.sh
-./install.sh
-```
+2. **首次安装，一条命令完成**：
+   ```bash
+   git clone https://github.com/rdone4425/trading-ai.git && cd trading-ai && chmod +x install.sh && ./install.sh
+   ```
 
-**分步执行（传统方式）：**
-```bash
-# 1. 克隆项目
-git clone https://github.com/rdone4425/trading-ai.git
-cd trading-ai
+3. **在任意目录运行脚本，它会引导下载**：
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rdone4425/trading-ai/main/install.sh -o install.sh
+   chmod +x install.sh
+   ./install.sh
+   ```
 
-# 2. 赋予执行权限并运行
-chmod +x install.sh
-./install.sh
-```
+> 💡 **提示**：如果当前目录不是项目目录，脚本会自动提示下载项目。
 
 **脚本功能菜单：**
 
@@ -84,13 +75,6 @@ chmod +x install.sh
 - ✅ **版本提示**：菜单中显示代码是否有新版本可用
 - ✅ **支持多系统**：支持 Ubuntu/Debian/CentOS/RHEL/Fedora
 - ✅ **彩色输出**：实时显示系统状态，操作提示清晰
-
-**更新流程：**
-1. 选择菜单选项 `[U]` 更新项目代码
-2. 脚本自动检测是否有新版本
-3. 如果有更新，自动拉取最新代码
-4. 询问是否立即重新构建并启动服务
-5. 完成！服务已运行最新版本
 
 ### 方式二：Docker 手动部署
 
@@ -376,15 +360,19 @@ PROXY_PORT=7890
 ```bash
 ./install.sh
 # 选择菜单选项 [U] 更新项目代码
-# 脚本会自动检测更新、拉取代码、重新构建并启动服务
 ```
+脚本会自动：
+1. 检测是否有新版本
+2. 拉取最新代码
+3. 询问是否重新构建并启动服务
+4. 完成更新并重启服务
 
 **方式二：手动更新**
 ```bash
 # 使用 Git 拉取最新代码
 git pull origin main
 
-# 如果使用 Docker，重新构建镜像
+# 如果使用 Docker，重新构建镜像并启动
 docker-compose build
 docker-compose up -d
 ```
