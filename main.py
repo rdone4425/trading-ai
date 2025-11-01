@@ -610,9 +610,13 @@ async def run_auto_scan(scanner):
     # 获取交易执行器（如果存在）
     trader = getattr(scanner, 'trader', None)
     
-    # 启动自动扫描（传递 trader 参数）
+    # 定义异步回调函数包装器
+    async def callback_wrapper(s, symbols, tickers):
+        await scan_callback(s, symbols, tickers, trader)
+    
+    # 启动自动扫描（传递异步回调）
     await scanner.start_auto_scan(
-        callback=lambda s, symbols, tickers: scan_callback(s, symbols, tickers, trader),
+        callback=callback_wrapper,
         align_to_kline=True,
         wait_for_close=True
     )

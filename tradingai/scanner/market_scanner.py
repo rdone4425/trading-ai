@@ -873,10 +873,15 @@ class MarketScanner:
                     # 调用回调函数（传入 scanner 实例）
                     if self._scan_callback:
                         try:
+                            # 检查回调函数是否是协程函数
                             if asyncio.iscoroutinefunction(self._scan_callback):
                                 await self._scan_callback(self, symbols, self.tickers)
                             else:
-                                self._scan_callback(self, symbols, self.tickers)
+                                # 同步回调函数，直接调用
+                                result = self._scan_callback(self, symbols, self.tickers)
+                                # 如果返回的是协程对象，需要await
+                                if asyncio.iscoroutine(result):
+                                    await result
                         except Exception as e:
                             logger.error(f"回调函数执行失败: {e}", exc_info=True)
                     
